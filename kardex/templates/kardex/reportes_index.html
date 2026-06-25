@@ -1,0 +1,50 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h1 class="h3 mb-0">Reportes</h1>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-6 col-xl-3">
+        <a class="card text-decoration-none text-dark h-100" href="{% url 'kardex:reporte_stock_actual' %}">
+            <div class="card-body">
+                <div class="fw-semibold mb-1">Stock actual</div>
+                <div class="text-secondary small">Cantidades, costo promedio y stock valorizado por producto.</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <a class="card text-decoration-none text-dark h-100" href="{% url 'kardex:reporte_kardex_producto' %}">
+            <div class="card-body">
+                <div class="fw-semibold mb-1">Kardex por producto</div>
+                <div class="text-secondary small">Entradas, salidas, saldos y costo promedio historico.</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <a class="card text-decoration-none text-dark h-100" href="{% url 'kardex:reporte_kardex_sunat_producto' %}">
+            <div class="card-body">
+                <div class="fw-semibold mb-1">Kardex valorizado SUNAT</div>
+                <div class="text-secondary small">Formato 13.1 por producto con entradas, salidas y saldo final.</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <a class="card text-decoration-none text-dark h-100" href="{% url 'kardex:reporte_documentos_importados' %}">
+            <div class="card-body">
+                <div class="fw-semibold mb-1">Documentos importados</div>
+                <div class="text-secondary small">Documentos XML con estado, entidad y total.</div>
+            </div>
+        </a>
+    </div>
+    <div class="col-md-6 col-xl-3">
+        <a class="card text-decoration-none text-dark h-100" href="{% url 'kardex:reporte_movimientos_documento' %}">
+            <div class="card-body">
+                <div class="fw-semibold mb-1">Movimientos por documento</div>
+                <div class="text-secondary small">Movimientos Kardex generados desde cada documento.</div>
+            </div>
+        </a>
+    </div>
+</div>
+{% endblock %}

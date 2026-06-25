@@ -1,0 +1,384 @@
+# KARDEXML
+
+Aplicacion Django para importar comprobantes XML SUNAT, clasificarlos contra productos internos y generar movimientos de Kardex valorizado.
+
+Este proyecto fue recuperado despues de corrupcion en un disco extraible. Las vistas, templates, servicios y pruebas principales fueron reconstruidos para dejar la aplicacion operativa.
+
+## Como levantar la app
+
+Desde `F:\DEVELOPER\DEV_APP\KARDEXML`:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+Configura variables de entorno tomando como base `.env.example`:
+
+```powershell
+$env:DJANGO_SECRET_KEY='usa-una-clave-local'
+$env:DJANGO_DEBUG='1'
+$env:DJANGO_ALLOWED_HOSTS='127.0.0.1,localhost'
+```
+
+Ejecuta migraciones/tablas y levanta el servidor:
+
+```powershell
+python manage.py migrate --run-syncdb
+python manage.py runserver 127.0.0.1:8000
+```
+
+Si ya tienes el entorno activo y la base local creada, basta con:
+
+```powershell
+python manage.py runserver 127.0.0.1:8000
+```
+
+URL local:
+
+```text
+http://127.0.0.1:8000/
+```
+
+Admin:
+
+```text
+http://127.0.0.1:8000/admin/
+```
+
+Usuario local de trabajo: `rogger`. La clave no se documenta aqui por seguridad.
+
+Si se usa el entorno Python 3.12 recuperado:
+
+```powershell
+$env:PYTHONPATH='F:\DEVELOPER\DEV_APP\KARDEXML\.venv\Lib\site-packages'
+py -3.12 manage.py runserver 127.0.0.1:8000
+```
+
+## Verificacion
+
+Comandos usados para validar el estado actual:
+
+```powershell
+python manage.py check
+python manage.py test
+```
+
+Estado al ultimo avance: `54 tests OK`.
+
+## Base de datos y migraciones
+
+- La base local fue recreada despues de la corrupcion del disco.
+- En `kardexml/settings.py` sigue `MIGRATION_MODULES = {"kardex": None}` porque `kardex/migrations/0001_initial.py` quedo comprometido.
+- Para crear tablas desde los modelos en una base nueva:
+
+```powershell
+python manage.py migrate --run-syncdb
+```
+
+Si se usa Python 3.12 con el entorno recuperado:
+
+```powershell
+$env:PYTHONPATH='F:\DEVELOPER\DEV_APP\KARDEXML\.venv\Lib\site-packages'
+py -3.12 manage.py migrate --run-syncdb
+```
+
+## Configuracion actual importante
+
+- Empresa principal activa: RUC `20570726014`.
+- Razon social configurada: `EMPRESA CAFETALERA AROMAS DE CAFE E.I.R.L.`
+- El admin de Django registra los modelos de la app `kardex`.
+- El boton del usuario en el sidebar lleva al admin cuando el usuario es administrador.
+- La pagina de stock inicial filtra saldos iniciales reales, sin mezclar movimientos de documentos.
+- Los mensajes de error usan clases Bootstrap correctas mediante `MESSAGE_TAGS`.
+- `SECRET_KEY`, `DEBUG` y `ALLOWED_HOSTS` se leen desde variables de entorno (`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`).
+
+## Flujo operativo
+
+1. Cargar XML desde `XML > Importar`.
+2. Revisar documentos en `Documentos`.
+3. Filtrar u ordenar documentos por tipo, estado, serie o numero.
+4. Clasificar detalles individualmente o clasificar documentos en lote.
+5. Revisar documentos en `Pre-Kardex`.
+6. Aprobar Pre-Kardex para generar movimientos de inventario.
+7. Revisar reportes de stock, Kardex por producto, documentos importados y movimientos por documento.
+
+## Importacion XML
+
+Soporte actual:
+
+- Importacion XML por lote.
+- Rechazo de XML duplicados por hash.
+- Deteccion de duplicados por tipo, serie, numero, emisor y receptor.
+- `InvoiceTypeCode` `01`: Factura.
+- `InvoiceTypeCode` `04`: Liquidacion de compra.
+- En liquidaciones, si el productor tiene documento de 8 digitos, se registra como DNI.
+- En documentos normales, 8 digitos se infiere como DNI y 11 digitos como RUC cuando el XML no trae `schemeID`.
+- La moneda se lee de `DocumentCurrencyCode` y de atributos `currencyID`.
+- Si el XML viene en USD, el sistema exige tipo de cambio SUNAT venta para la fecha del documento.
+- Si no existe tipo de cambio para esa fecha, la importacion se detiene con mensaje.
+
+## Unidades, moneda y cantidades
+
+- `KGM` se normaliza como `KG`.
+- `LBR`, `LB` y `LBS` se normalizan como `LBR`.
+- Existe conversion `LBR -> KG` con factor `0.453592`.
+- Si un XML trae cantidad en `NIU`/`UND`, pero la descripcion contiene kilos, se guarda como `KG` y se usa la cantidad de kilos inferida.
+- Si el XML no trae valor/precio unitario util, se deriva:
+  - Valor unitario = subtotal / cantidad.
+  - Precio unitario = total / cantidad.
+- Los importes en moneda extranjera se convierten usando el tipo de cambio SUNAT venta.
+
+## Panel Documentos
+
+La pantalla `Documentos` permite:
+
+- Ver comprobantes importados.
+- Filtrar por tipo de documento.
+- Buscar por serie, numero o codigo de tipo.
+- Ordenar por fecha, tipo de documento o estado.
+- Seleccionar documentos pendientes con checkboxes.
+- Seleccionar todos o ninguno.
+- Clasificar documentos en lote con un producto, factor de conversion y regla de equivalencia.
+
+Ruta principal:
+
+```text
+/documentos/
+```
+
+Ruta POST para clasificacion masiva:
+
+```text
+/documentos/clasificar-bloque/
+```
+
+La vista acepta campos `documento_ids` y `documentos` para mantener compatibilidad con formularios anteriores.
+
+## Clasificacion
+
+Clasificacion individual:
+
+- Ruta: `/detalles/<id>/clasificar/`
+- Permite asignar producto interno.
+- Permite definir factor de conversion.
+- Permite guardar equivalencia por entidad o global.
+- Permite marcar un item como no aplicable al Kardex.
+
+Clasificacion por bloque dentro de un documento:
+
+- Ruta POST: `/documentos/<id>/clasificar-bloque/`
+- Permite seleccionar varios detalles del mismo documento.
+- Aplica el mismo producto, factor y equivalencia a todos los seleccionados.
+
+Clasificacion por bloque desde el panel Documentos:
+
+- Permite seleccionar varios documentos pendientes.
+- Clasifica todos los detalles pendientes de esos documentos con una misma regla.
+
+Validaciones relevantes:
+
+- No se puede clasificar un documento confirmado.
+- Las acciones por bloque sin seleccion no generan error 500; devuelven mensaje de usuario.
+- El factor de conversion debe ser mayor que cero.
+
+## Pre-Kardex y aprobacion
+
+La bandeja de Pre-Kardex permite:
+
+- Revisar documentos listos para aprobar.
+- Seleccionar varios documentos.
+- Usar botones `Todos` y `Ninguno`.
+- Aprobar seleccionados en bloque.
+- Aprobar un documento individual.
+
+Rutas:
+
+```text
+/pre-kardex/
+/pre-kardex/confirmar-bloque/
+/documentos/<id>/pre-kardex/
+/documentos/<id>/confirmar-kardex/
+```
+
+Al aprobar:
+
+- Se generan movimientos de entrada, salida o ajuste segun el tipo de operacion.
+- Se valida stock suficiente para salidas.
+- Se actualiza el saldo por producto con promedio movil.
+- El documento pasa a estado `Confirmado`.
+
+## Reversiones
+
+Reversion de Pre-Kardex:
+
+- Boton: `Quitar de Pre-Kardex`.
+- No elimina el XML ni el documento.
+- Devuelve el documento a `Pendiente de clasificacion`.
+- Limpia producto, factor, cantidad base y estado de clasificacion en sus detalles.
+- Ruta POST: `/documentos/<id>/revertir-pre-kardex/`
+
+Reversion de aprobacion:
+
+- Disponible para documentos confirmados.
+- Elimina los movimientos generados por ese documento.
+- Devuelve el documento a `Pre-Kardex`.
+- Solo se permite si esos movimientos siguen siendo los ultimos movimientos del producto.
+- Si ya existen movimientos posteriores, se bloquea para proteger saldos historicos.
+- Ruta POST: `/documentos/<id>/revertir-aprobacion/`
+
+## Stock inicial
+
+La pantalla de stock inicial permite:
+
+- Registrar stock inicial por producto.
+- Editar stock inicial si no existen movimientos posteriores.
+- Bloquear edicion si el producto ya tiene otros movimientos.
+- Registrar auditoria de creacion y edicion.
+
+Rutas:
+
+```text
+/stock-inicial/
+/stock-inicial/<movimiento_id>/editar/
+```
+
+## Reportes
+
+Pantallas disponibles:
+
+- Stock actual.
+- Kardex por producto.
+- Kardex valorizado SUNAT por producto, con formato 13.1.
+- Documentos importados.
+- Movimientos por documento.
+- Exportacion Excel `.xlsx` en los reportes.
+
+Rutas:
+
+```text
+/reportes/
+/reportes/stock-actual/
+/reportes/kardex-producto/
+/reportes/kardex-sunat-producto/
+/reportes/documentos-importados/
+/reportes/movimientos-documento/
+```
+
+### Kardex valorizado SUNAT por producto
+
+La pantalla `Kardex valorizado SUNAT` genera el Formato 13.1: `Registro de Inventario Permanente Valorizado - Detalle del Inventario Valorizado`.
+
+Incluye:
+
+- Filtro obligatorio por producto.
+- Filtro opcional por fecha inicial y final.
+- Cabecera con periodo, RUC, razon social, establecimiento, codigo de existencia, tipo de existencia, descripcion, unidad y metodo de valuacion.
+- Columnas de documento: fecha, tipo, serie y numero.
+- Tipo de operacion.
+- Entradas: cantidad, costo unitario y costo total.
+- Salidas: cantidad, costo unitario y costo total.
+- Saldo final: cantidad, costo unitario y costo total.
+
+La valorizacion usa los movimientos confirmados en `MovimientoKardex`, por lo que el reporte depende de que los documentos hayan sido aprobados en Pre-Kardex.
+
+### Exportacion Excel
+
+Los reportes operativos incluyen boton `Exportar Excel` y usan los mismos filtros aplicados en pantalla. Si `openpyxl` esta disponible generan `.xlsx`; si el entorno no tiene `openpyxl`, generan `.xls` compatible con Excel para no impedir que la app cargue.
+
+- Stock actual.
+- Kardex por producto.
+- Kardex valorizado SUNAT por producto.
+- Documentos importados.
+- Movimientos por documento.
+
+La exportacion se activa con el parametro `export=excel` en la URL del reporte.
+
+## Pantallas recuperadas o ajustadas
+
+- Dashboard.
+- Importacion XML por lote.
+- Documentos importados con filtros, ordenamiento y clasificacion masiva.
+- Documentos pendientes.
+- Comprobante de documento.
+- Clasificacion individual.
+- Clasificacion por bloque de detalles.
+- Clasificacion por lote desde Documentos.
+- Entidades.
+- Productos.
+- Equivalencias XML.
+- Stock inicial y edicion de stock inicial.
+- Pre-Kardex por aprobar.
+- Reversion de Pre-Kardex.
+- Reversion de aprobacion.
+- Tipo de cambio SUNAT.
+- Reportes.
+- Kardex valorizado SUNAT por producto.
+- Exportacion Excel de reportes.
+- Mejora visual global: tipografia Inter mas liviana, tablas con mas padding, formularios mas legibles, KPI cards balanceadas y reporte SUNAT con scroll horizontal y columnas mas respirables.
+
+## Pruebas cubiertas
+
+La suite actual cubre, entre otros:
+
+- Importacion de facturas y liquidaciones.
+- Moneda USD con tipo de cambio SUNAT.
+- Normalizacion de unidades `KGM`, `LBR` y `NIU` con kilos en descripcion.
+- Inferencia y correccion de DNI/RUC.
+- Rechazo de XML duplicado.
+- Listado de documentos, filtros y ordenamiento.
+- Clasificacion individual y por bloque.
+- Clasificacion masiva desde Documentos.
+- Pre-Kardex y aprobacion individual/bloque.
+- Reversion de Pre-Kardex sin borrar XML.
+- Reversion de aprobacion con bloqueo por movimientos posteriores.
+- Stock inicial y edicion controlada.
+- Reportes principales.
+- Kardex valorizado SUNAT por producto.
+- Exportacion Excel `.xlsx` o `.xls` compatible segun dependencias disponibles.
+- Formatos de numero y fecha.
+
+## Recomendaciones para no volver a perder avances
+
+- No trabajar directamente sobre un disco extraible con errores.
+- Mover el proyecto a un disco interno o SSD estable.
+- Usar Git y hacer commits pequenos despues de cada correccion importante.
+- Subir el repositorio a GitHub como respaldo remoto.
+- Mantener copias de `db.sqlite3` si se necesita conservar datos cargados localmente.
+- Separar respaldos de codigo y respaldos de base de datos.
+
+## Preparacion para GitHub
+
+Archivos agregados para publicar el proyecto:
+
+- `.gitignore`: excluye entornos virtuales, base SQLite local, logs, cache Python, `.env` y artefactos locales.
+- `requirements.txt`: dependencias reproducibles (`Django` y `openpyxl`).
+- `.env.example`: variables necesarias sin secretos reales.
+
+Importante: la carpeta `.git` local encontrada esta vacia y Git no reconoce el directorio como repositorio. Antes de subir, inicializa Git desde la raiz del proyecto:
+
+```powershell
+git init
+git config --global --add safe.directory F:/DEVELOPER/DEV_APP/KARDEXML
+git add .
+git commit -m "Estado recuperado de KARDEXML"
+git branch -M main
+git remote add origin https://github.com/TU_USUARIO/TU_REPO.git
+git push -u origin main
+```
+
+Antes de ejecutar `git add .`, confirma que no se incluiran archivos locales sensibles:
+
+```powershell
+git status --short
+```
+
+No deberian aparecer `db.sqlite3`, `.venv/`, `.env`, `*.log` ni `__pycache__/`.
+
+## Pendientes tecnicos
+
+- Reconstruir migraciones Django definitivas y quitar `MIGRATION_MODULES = {"kardex": None}` cuando el esquema este estabilizado.
+- Confirmar con XML reales de SUNAT todos los formatos de liquidacion usados por la empresa.
+- Crear respaldo Git/GitHub del estado actual.
+- Revisar politicas de seguridad para produccion: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS` y manejo de credenciales.

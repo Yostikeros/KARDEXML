@@ -1,0 +1,44 @@
+from django.urls import path
+
+from . import views
+
+app_name = 'kardex'
+
+urlpatterns = [
+    path('', views.dashboard, name='dashboard'),
+    path('xml/importar/', views.importar_xml_lote_view, name='importar_xml_lote'),
+    path('xml/equivalencias/', views.equivalencias_xml_lista_view, name='equivalencias_xml_lista'),
+    path('xml/equivalencias/nueva/', views.equivalencia_xml_crear_view, name='equivalencia_xml_crear'),
+    path('xml/equivalencias/<int:equivalencia_id>/editar/', views.equivalencia_xml_editar_view, name='equivalencia_xml_editar'),
+    path('xml/equivalencias/<int:equivalencia_id>/activar/', views.equivalencia_xml_toggle_view, name='equivalencia_xml_toggle'),
+    path('productos/', views.productos_lista_view, name='productos_lista'),
+    path('productos/nuevo/', views.producto_crear_view, name='producto_crear'),
+    path('productos/<int:producto_id>/editar/', views.producto_editar_view, name='producto_editar'),
+    path('entidades/', views.entidades_lista_view, name='entidades_lista'),
+    path('entidades/nueva/', views.entidad_crear_view, name='entidad_crear'),
+    path('entidades/<int:entidad_id>/editar/', views.entidad_editar_view, name='entidad_editar'),
+    path('entidades/<int:entidad_id>/activar/', views.entidad_toggle_view, name='entidad_toggle'),
+    path('documentos/', views.documentos_lista_view, name='documentos_lista'),
+    path('documentos/clasificar-bloque/', views.clasificar_documentos_bloque_view, name='clasificar_documentos_bloque'),
+    path('documentos/pendientes/', views.documentos_pendientes_view, name='documentos_pendientes'),
+    path('documentos/<int:documento_id>/clasificar/', views.clasificar_documento_view, name='clasificar_documento'),
+    path('documentos/<int:documento_id>/clasificar-bloque/', views.clasificar_detalles_bloque_view, name='clasificar_bloque'),
+    path('documentos/<int:documento_id>/comprobante/', views.comprobante_documento_view, name='comprobante_documento'),
+    path('detalles/<int:detalle_id>/clasificar/', views.clasificar_detalle_view, name='clasificar_detalle'),
+    path('detalles/<int:detalle_id>/excluir-kardex/', views.excluir_detalle_kardex_view, name='excluir_detalle_kardex'),
+    path('pre-kardex/', views.pre_kardex_lista_view, name='pre_kardex_lista'),
+    path('pre-kardex/confirmar-bloque/', views.confirmar_kardex_bloque_view, name='confirmar_kardex_bloque'),
+    path('documentos/<int:documento_id>/pre-kardex/', views.pre_kardex_documento_view, name='pre_kardex_documento'),
+    path('documentos/<int:documento_id>/confirmar-kardex/', views.confirmar_kardex_documento_view, name='confirmar_kardex_documento'),
+    path('documentos/<int:documento_id>/revertir-pre-kardex/', views.revertir_pre_kardex_view, name='revertir_pre_kardex'),
+    path('documentos/<int:documento_id>/revertir-aprobacion/', views.revertir_aprobacion_kardex_view, name='revertir_aprobacion_kardex'),
+    path('stock-inicial/', views.stock_inicial_view, name='stock_inicial'),
+    path('tipo-cambio-sunat/', views.tipo_cambio_sunat_view, name='tipo_cambio_sunat'),
+    path('stock-inicial/<int:movimiento_id>/editar/', views.editar_stock_inicial_view, name='editar_stock_inicial'),
+    path('reportes/', views.reportes_index_view, name='reportes_index'),
+    path('reportes/stock-actual/', views.reporte_stock_actual_view, name='reporte_stock_actual'),
+    path('reportes/kardex-producto/', views.reporte_kardex_producto_view, name='reporte_kardex_producto'),
+    path('reportes/kardex-sunat-producto/', views.reporte_kardex_sunat_producto_view, name='reporte_kardex_sunat_producto'),
+    path('reportes/documentos-importados/', views.reporte_documentos_importados_view, name='reporte_documentos_importados'),
+    path('reportes/movimientos-documento/', views.reporte_movimientos_documento_view, name='reporte_movimientos_documento'),
+]

@@ -1,0 +1,103 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Comprobante {{ documento }}</h1>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'kardex:documentos_pendientes' %}">Pendientes</a>
+        <a class="btn btn-primary" href="{% url 'kardex:clasificar_documento' documento.id %}">Clasificar</a>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body p-4">
+        <div class="row g-3 align-items-start border-bottom pb-4 mb-4">
+            <div class="col-md-7">
+                <div class="fs-4 fw-bold">{{ documento.entidad_emisor.razon_social }}</div>
+                {% if documento.entidad_emisor.nombre_comercial %}
+                    <div class="text-secondary">{{ documento.entidad_emisor.nombre_comercial }}</div>
+                {% endif %}
+                <div>{{ documento.entidad_emisor.tipo_documento_identidad }} {{ documento.entidad_emisor.numero_documento }}</div>
+                {% if documento.entidad_emisor.direccion %}
+                    <div>{{ documento.entidad_emisor.direccion }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-5">
+                <div class="border border-dark rounded p-3 text-center">
+                    <div class="fw-semibold">{{ documento.entidad_emisor.tipo_documento_identidad }} {{ documento.entidad_emisor.numero_documento }}</div>
+                    <div class="fs-4 fw-bold text-uppercase">{{ documento.tipo_documento_nombre }}</div>
+                    <div class="fs-4">{{ documento.serie }}-{{ documento.numero }}</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-7">
+                <div class="text-secondary small">Senor(es)</div>
+                <div class="fw-semibold">{{ documento.entidad_receptor.razon_social }}</div>
+                <div>{{ documento.entidad_receptor.tipo_documento_identidad }} {{ documento.entidad_receptor.numero_documento }}</div>
+                {% if documento.entidad_receptor.direccion %}
+                    <div>{{ documento.entidad_receptor.direccion }}</div>
+                {% endif %}
+            </div>
+            <div class="col-md-5">
+                <table class="table table-sm mb-0">
+                    <tbody>
+                    <tr><th>Fecha emision</th><td class="text-end">{{ documento.fecha_emision|fecha_corta }}</td></tr>
+                    <tr><th>Moneda</th><td class="text-end">{{ documento.moneda_mostrada }}</td></tr>
+                    <tr><th>Operacion</th><td class="text-end">{{ documento.tipo_operacion_nombre }}</td></tr>
+                    <tr><th>Estado</th><td class="text-end">{{ documento.get_estado_display }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered align-middle">
+                <thead class="table-light">
+                <tr>
+                    <th>Codigo</th>
+                    <th>Descripcion</th>
+                    <th class="text-end">Cantidad</th>
+                    <th>Unidad</th>
+                    <th class="text-end">Valor unitario</th>
+                    <th class="text-end">Precio unitario</th>
+                    <th class="text-end">Subtotal</th>
+                    <th class="text-end">IGV</th>
+                    <th class="text-end">Total</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for detalle in detalles %}
+                    <tr>
+                        <td>{{ detalle.codigo_producto_xml|default:"-" }}</td>
+                        <td>{{ detalle.descripcion_xml }}</td>
+                        <td class="text-end">{{ detalle.cantidad_operativa|numero }}</td>
+                        <td>{{ detalle.unidad_operativa }}</td>
+                        <td class="text-end">{{ detalle.valor_unitario|numero }}</td>
+                        <td class="text-end">{{ detalle.precio_unitario|numero }}</td>
+                        <td class="text-end">{{ detalle.subtotal|numero }}</td>
+                        <td class="text-end">{{ detalle.igv|numero }}</td>
+                        <td class="text-end">{{ detalle.total|numero }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="row justify-content-end">
+            <div class="col-md-5 col-lg-4">
+                <table class="table table-sm">
+                    <tbody>
+                    <tr><th>Subtotal</th><td class="text-end">{{ subtotal|numero }}</td></tr>
+                    <tr><th>IGV</th><td class="text-end">{{ igv|numero }}</td></tr>
+                    <tr class="fs-5"><th>Total</th><td class="text-end fw-bold">{{ documento.total|numero }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+

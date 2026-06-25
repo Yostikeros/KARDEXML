@@ -1,0 +1,109 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-10 col-lg-11">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div>
+                <h1 class="h3 mb-1">{{ titulo }}</h1>
+                <div class="text-secondary">Registra datos de identificacion, ubicacion y rol comercial.</div>
+            </div>
+            <a class="btn btn-outline-secondary" href="{% url 'kardex:entidades_lista' %}">Volver</a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label" for="{{ form.tipo_documento_identidad.id_for_label }}">{{ form.tipo_documento_identidad.label }}</label>
+                            {{ form.tipo_documento_identidad }}
+                            {% for error in form.tipo_documento_identidad.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="{{ form.numero_documento.id_for_label }}">{{ form.numero_documento.label }}</label>
+                            {{ form.numero_documento }}
+                            {% for error in form.numero_documento.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.razon_social.id_for_label }}">{{ form.razon_social.label }}</label>
+                            {{ form.razon_social }}
+                            {% for error in form.razon_social.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.nombre_comercial.id_for_label }}">{{ form.nombre_comercial.label }}</label>
+                            {{ form.nombre_comercial }}
+                            {% for error in form.nombre_comercial.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.direccion.id_for_label }}">{{ form.direccion.label }}</label>
+                            {{ form.direccion }}
+                            {% for error in form.direccion.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="{{ form.ubigeo.id_for_label }}">{{ form.ubigeo.label }}</label>
+                            {{ form.ubigeo }}
+                            {% for error in form.ubigeo.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="{{ form.departamento.id_for_label }}">{{ form.departamento.label }}</label>
+                            {{ form.departamento }}
+                            {% for error in form.departamento.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="{{ form.provincia.id_for_label }}">{{ form.provincia.label }}</label>
+                            {{ form.provincia }}
+                            {% for error in form.provincia.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="{{ form.distrito.id_for_label }}">{{ form.distrito.label }}</label>
+                            {{ form.distrito }}
+                            {% for error in form.distrito.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-1">
+                            <label class="form-label" for="{{ form.pais.id_for_label }}">{{ form.pais.label }}</label>
+                            {{ form.pais }}
+                            {% for error in form.pais.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label" for="{{ form.telefono.id_for_label }}">{{ form.telefono.label }}</label>
+                            {{ form.telefono }}
+                            {% for error in form.telefono.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label" for="{{ form.email.id_for_label }}">{{ form.email.label }}</label>
+                            {{ form.email }}
+                            {% for error in form.email.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end gap-4">
+                            <div class="form-check mb-2">
+                                {{ form.es_cliente }}
+                                <label class="form-check-label" for="{{ form.es_cliente.id_for_label }}">{{ form.es_cliente.label }}</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                {{ form.es_proveedor }}
+                                <label class="form-check-label" for="{{ form.es_proveedor.id_for_label }}">{{ form.es_proveedor.label }}</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                {{ form.activo }}
+                                <label class="form-check-label" for="{{ form.activo.id_for_label }}">{{ form.activo.label }}</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mt-4">
+                        <button class="btn btn-primary" type="submit">Guardar entidad</button>
+                        <a class="btn btn-outline-secondary" href="{% url 'kardex:entidades_lista' %}">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

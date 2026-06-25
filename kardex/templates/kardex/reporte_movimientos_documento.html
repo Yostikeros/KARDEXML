@@ -1,0 +1,71 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Movimientos por documento</h1>
+    <a class="btn btn-outline-secondary" href="{% url 'kardex:reportes_index' %}">Reportes</a>
+</div>
+
+<form class="card mb-3" method="get">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label" for="documento">Documento</label>
+                <select class="form-select" id="documento" name="documento">
+                    <option value="">Todos los documentos</option>
+                    {% for documento in documentos %}
+                        <option value="{{ documento.id }}" {% if documento_seleccionado and documento.id == documento_seleccionado.id %}selected{% endif %}>
+                            {{ documento.fecha_emision|fecha_corta }} - {{ documento }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary" type="submit">Filtrar</button>
+                <button class="btn btn-outline-success" type="submit" name="export" value="excel">Exportar Excel</button>
+                <a class="btn btn-outline-secondary" href="{% url 'kardex:reporte_movimientos_documento' %}">Limpiar</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Documento</th>
+                <th>Fecha</th>
+                <th>Entidad</th>
+                <th>Producto</th>
+                <th>Movimiento</th>
+                <th class="text-end">Entrada</th>
+                <th class="text-end">Salida</th>
+                <th class="text-end">Costo entrada</th>
+                <th class="text-end">Costo salida</th>
+                <th class="text-end">Stock final</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for mov in movimientos %}
+                <tr>
+                    <td>{{ mov.documento_origen|default:"-" }}</td>
+                    <td>{{ mov.fecha|fecha_corta }}</td>
+                    <td>{{ mov.entidad|default:"-" }}</td>
+                    <td>{{ mov.producto }}</td>
+                    <td>{{ mov.get_tipo_movimiento_display }}</td>
+                    <td class="text-end">{{ mov.cantidad_entrada|numero }}</td>
+                    <td class="text-end">{{ mov.cantidad_salida|numero }}</td>
+                    <td class="text-end">{{ mov.costo_total_entrada|numero }}</td>
+                    <td class="text-end">{{ mov.costo_total_salida|numero }}</td>
+                    <td class="text-end">{{ mov.stock_cantidad|numero }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="10" class="text-secondary">No hay movimientos para el filtro seleccionado.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

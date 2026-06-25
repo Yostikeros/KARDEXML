@@ -1,0 +1,115 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="page-heading">
+    <div>
+        <h1>Aprobar Pre-Kardex</h1>
+        <p>Documentos clasificados y listos para aprobar movimientos de inventario</p>
+    </div>
+    <a class="btn app-btn-primary" href="{% url 'kardex:documentos_pendientes' %}">
+        Pendientes
+    </a>
+</div>
+
+<form method="post" action="{% url 'kardex:confirmar_kardex_bloque' %}">
+    {% csrf_token %}
+    <div class="data-card">
+        <div class="data-card-header">
+            <div>
+                <h2>Documentos en Pre-Kardex</h2>
+                <p>{{ documentos|length }} documento(s) disponibles para revision</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2"><button class="btn btn-outline-secondary" type="button" data-select-pre-kardex="all">Todos</button><button class="btn btn-outline-secondary" type="button" data-select-pre-kardex="none">Ninguno</button><button class="btn btn-success" type="submit">Aprobar seleccionados</button></div>
+        </div>
+        <div class="table-responsive">
+            <table class="table app-table align-middle mb-0">
+                <thead>
+                <tr>
+                    <th style="width:44px;"></th>
+                    <th>Fecha</th>
+                    <th>Documento</th>
+                    <th>Operacion</th>
+                    <th>Entidad</th>
+                    <th class="text-end">Total</th>
+                    <th class="text-end">Acciones</th>
+                </tr>
+                </thead>
+                <tbody>
+                {% for doc in documentos %}
+                    <tr>
+                        <td>
+                            <input class="form-check-input js-pre-kardex-check" type="checkbox" name="documento_ids" value="{{ doc.id }}" aria-label="Seleccionar {{ doc }}">
+                        </td>
+                        <td class="date-cell">{{ doc.fecha_emision|fecha_corta }}</td>
+                        <td>
+                            <div class="fw-semibold">{{ doc.tipo_documento_nombre }}</div>
+                            <div class="small text-secondary">{{ doc.serie }}-{{ doc.numero }}</div>
+                            {% for detalle in doc.detalles.all %}
+                                <div class="small text-secondary">{{ detalle.descripcion_xml }}</div>
+                            {% endfor %}
+                        </td>
+                        <td>{{ doc.tipo_operacion_nombre }}</td>
+                        <td class="product-cell">
+                            {% if doc.proveedor %}
+                                <div class="fw-semibold">{{ doc.proveedor.razon_social }}</div>
+                                <div class="small text-secondary">Proveedor - {{ doc.proveedor.tipo_documento_identidad }} {{ doc.proveedor.numero_documento }}</div>
+                            {% elif doc.cliente %}
+                                <div class="fw-semibold">{{ doc.cliente.razon_social }}</div>
+                                <div class="small text-secondary">Cliente - {{ doc.cliente.tipo_documento_identidad }} {{ doc.cliente.numero_documento }}</div>
+                            {% else %}
+                                <div class="fw-semibold">{{ doc.entidad_emisor.razon_social }}</div>
+                                <div class="small text-secondary">{{ doc.entidad_emisor.numero_documento }}</div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">{{ doc.total|numero }}</td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a class="btn btn-outline-primary" href="{% url 'kardex:pre_kardex_documento' doc.id %}">Revisar</a>
+                                <a class="btn btn-outline-secondary" href="{% url 'kardex:comprobante_documento' doc.id %}">Comprobante</a>
+                                <button
+                                    class="btn btn-outline-danger"
+                                    type="submit"
+                                    formaction="{% url 'kardex:revertir_pre_kardex' doc.id %}"
+                                    formmethod="post"
+                                    name="next"
+                                    value="pre_kardex_lista"
+                                >Quitar de Pre-Kardex</button>
+                            </div>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7">
+                            <div class="empty-state">
+                                <div class="empty-state-title">No hay documentos en Pre-Kardex</div>
+                                <div class="empty-state-text">Clasifica los documentos pendientes antes de aprobarlos.</div>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</form>
+
+<script>
+document.addEventListener('click', function (event) {
+    var action = event.target.getAttribute('data-select-pre-kardex');
+    if (!action) return;
+    document.querySelectorAll('.js-pre-kardex-check').forEach(function (checkbox) {
+        checkbox.checked = action === 'all';
+    });
+});
+</script>
+{% endblock %}
+
+
+

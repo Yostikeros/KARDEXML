@@ -1,0 +1,50 @@
+<a class="app-brand" href="{% url 'kardex:dashboard' %}">
+    <span class="app-brand-mark">KX</span>
+    <span class="app-brand-text">
+        <span class="app-brand-name">Kardex XML</span>
+        <span class="app-brand-subtitle">Inventario y XML</span>
+    </span>
+</a>
+
+<div class="sidebar-section">
+    <div class="sidebar-section-title">Operacion</div>
+    <nav class="sidebar-nav">
+        <a class="nav-link {% if current == 'dashboard' %}active{% endif %}" href="{% url 'kardex:dashboard' %}"><span class="nav-icon">IN</span><span>Dashboard</span></a>
+        <a class="nav-link {% if current == 'importar_xml_lote' %}active{% endif %}" href="{% url 'kardex:importar_xml_lote' %}"><span class="nav-icon">XML</span><span>Importar XML</span></a>
+        <a class="nav-link {% if current == 'documentos_pendientes' or current == 'clasificar_documento' or current == 'clasificar_detalle' %}active{% endif %}" href="{% url 'kardex:documentos_pendientes' %}"><span class="nav-icon">PE</span><span>Pendientes</span></a>
+        <a class="nav-link {% if current == 'pre_kardex_lista' or current == 'pre_kardex_documento' %}active{% endif %}" href="{% url 'kardex:pre_kardex_lista' %}"><span class="nav-icon">PK</span><span>Pre-Kardex</span></a>
+        <a class="nav-link {% if current == 'stock_inicial' or current == 'editar_stock_inicial' %}active{% endif %}" href="{% url 'kardex:stock_inicial' %}"><span class="nav-icon">ST</span><span>Stock inicial</span></a>
+    </nav>
+</div>
+
+<div class="sidebar-section">
+    <div class="sidebar-section-title">Maestros</div>
+    <nav class="sidebar-nav">
+        <a class="nav-link {% if current == 'productos_lista' or current == 'producto_crear' or current == 'producto_editar' %}active{% endif %}" href="{% url 'kardex:productos_lista' %}"><span class="nav-icon">PR</span><span>Productos</span></a>
+        <a class="nav-link {% if current == 'equivalencias_xml_lista' or current == 'equivalencia_xml_crear' or current == 'equivalencia_xml_editar' %}active{% endif %}" href="{% url 'kardex:equivalencias_xml_lista' %}"><span class="nav-icon">EQ</span><span>Equivalencias XML</span></a>
+        <a class="nav-link {% if current == 'entidades_lista' or current == 'entidad_crear' or current == 'entidad_editar' %}active{% endif %}" href="{% url 'kardex:entidades_lista' %}"><span class="nav-icon">EN</span><span>Entidades</span></a>
+    </nav>
+</div>
+
+<div class="sidebar-section">
+    <div class="sidebar-section-title">Consulta</div>
+    <nav class="sidebar-nav">
+        <a class="nav-link {% if current == 'documentos_lista' or current == 'comprobante_documento' %}active{% endif %}" href="{% url 'kardex:documentos_lista' %}"><span class="nav-icon">DO</span><span>Documentos</span></a>
+        <a class="nav-link {% if current == 'tipo_cambio_sunat' %}active{% endif %}" href="{% url 'kardex:tipo_cambio_sunat' %}"><span class="nav-icon">TC</span><span>Tipo cambio</span></a>
+        <a class="nav-link {% if current == 'reportes_index' or current == 'reporte_stock_actual' or current == 'reporte_kardex_producto' or current == 'reporte_kardex_sunat_producto' or current == 'reporte_documentos_importados' or current == 'reporte_movimientos_documento' %}active{% endif %}" href="{% url 'kardex:reportes_index' %}"><span class="nav-icon">RE</span><span>Reportes</span></a>
+    </nav>
+</div>
+
+<div class="app-sidebar-footer">
+    {% if request.user.is_staff %}
+        <a class="app-user text-decoration-none" href="{% url 'admin:index' %}" title="Abrir administrador Django">
+            <span class="app-user-avatar">{{ request.user.username|first|upper }}</span>
+            <span class="app-user-name">{{ request.user.username }}</span>
+        </a>
+    {% else %}
+        <div class="app-user">
+            <span class="app-user-avatar">{{ request.user.username|first|upper }}</span>
+            <span class="app-user-name">{{ request.user.username }}</span>
+        </div>
+    {% endif %}
+</div>

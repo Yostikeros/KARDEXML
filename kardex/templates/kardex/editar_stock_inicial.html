@@ -1,0 +1,60 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="row justify-content-center">
+    <div class="col-lg-7">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h1 class="h3 mb-0">Editar stock inicial</h1>
+            <a class="btn btn-outline-secondary" href="{% url 'kardex:stock_inicial' %}">Volver</a>
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-white fw-semibold">{{ movimiento.producto }}</div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.fecha.id_for_label }}">{{ form.fecha.label }}</label>
+                        {{ form.fecha }}
+                        {% for error in form.fecha.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.producto.id_for_label }}">{{ form.producto.label }}</label>
+                        {{ form.producto }}
+                        <div class="form-text">El producto no se puede cambiar en una edicion de stock inicial.</div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.cantidad.id_for_label }}">{{ form.cantidad.label }}</label>
+                            {{ form.cantidad }}
+                            {% for error in form.cantidad.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.costo_unitario.id_for_label }}">{{ form.costo_unitario.label }}</label>
+                            {{ form.costo_unitario }}
+                            {% for error in form.costo_unitario.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.observacion.id_for_label }}">{{ form.observacion.label }}</label>
+                        {{ form.observacion }}
+                    </div>
+                    <button class="btn btn-primary" type="submit">Guardar cambios</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

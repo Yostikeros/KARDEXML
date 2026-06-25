@@ -1,0 +1,116 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Dashboard</h1>
+        <p>Resumen general del kardex valorizado</p>
+    </div>
+    <a class="btn app-btn-primary" href="{% url 'kardex:importar_xml_lote' %}">
+        <span class="btn-icon">+</span>
+        Importar XML
+    </a>
+</div>
+
+<div class="metric-grid">
+    <div class="metric-card">
+        <div class="metric-icon metric-icon-blue">P</div>
+        <div>
+            <div class="metric-label">Productos activos</div>
+            <div class="metric-value">{{ productos_activos }}</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon metric-icon-green">C</div>
+        <div>
+            <div class="metric-label">Clientes</div>
+            <div class="metric-value">{{ clientes }}</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon metric-icon-amber">R</div>
+        <div>
+            <div class="metric-label">Proveedores</div>
+            <div class="metric-value">{{ proveedores }}</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon metric-icon-indigo">D</div>
+        <div>
+            <div class="metric-label">Documentos</div>
+            <div class="metric-value">{{ documentos_importados }}</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon metric-icon-red">!</div>
+        <div>
+            <div class="metric-label">Pendientes</div>
+            <div class="metric-value">{{ documentos_pendientes }}</div>
+        </div>
+    </div>
+    <div class="metric-card">
+        <div class="metric-icon metric-icon-slate">S/</div>
+        <div>
+            <div class="metric-label">Stock valorizado</div>
+            <div class="metric-value metric-value-money">{{ stock_valorizado_total|numero }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="data-card">
+    <div class="data-card-header">
+        <div>
+            <h2>Ultimos movimientos de Kardex</h2>
+            <p>Movimientos recientes que afectaron saldos y costos</p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table app-table align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Movimiento</th>
+                <th class="text-end">Entrada</th>
+                <th class="text-end">Salida</th>
+                <th class="text-end">Stock</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for mov in ultimos_movimientos %}
+                <tr>
+                    <td class="date-cell">{{ mov.fecha|fecha_corta }}</td>
+                    <td class="product-cell">{{ mov.producto }}</td>
+                    <td>
+                        {% if mov.tipo_movimiento == "entrada" %}
+                            <span class="movement-badge movement-in">Entrada</span>
+                        {% elif mov.tipo_movimiento == "salida" %}
+                            <span class="movement-badge movement-out">Salida</span>
+                        {% elif mov.tipo_movimiento == "ajuste_entrada" %}
+                            <span class="movement-badge movement-adjust">Ajuste entrada</span>
+                        {% elif mov.tipo_movimiento == "ajuste_salida" %}
+                            <span class="movement-badge movement-neutral">Ajuste salida</span>
+                        {% else %}
+                            <span class="movement-badge movement-neutral">{{ mov.get_tipo_movimiento_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">{{ mov.cantidad_entrada|numero }}</td>
+                    <td class="text-end">{{ mov.cantidad_salida|numero }}</td>
+                    <td class="text-end">{{ mov.stock_cantidad|numero }}</td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <div class="empty-state-title">Aun no hay movimientos</div>
+                            <div class="empty-state-text">Importa XML, registra stock inicial o aprueba un Pre-Kardex para ver actividad.</div>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

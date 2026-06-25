@@ -1,0 +1,123 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="page-heading">
+    <div>
+        <h1>Equivalencias XML</h1>
+        <p>Mapea productos del XML SUNAT con productos internos para clasificar importaciones automaticamente.</p>
+    </div>
+    <a class="btn app-btn-primary" href="{% url 'kardex:equivalencia_xml_crear' %}">
+        <span class="btn-icon">+</span>
+        Nueva equivalencia
+    </a>
+</div>
+
+<form class="card mb-3" method="get">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-lg-5 col-md-6">
+                <label class="form-label" for="q">Buscar</label>
+                <input class="form-control" id="q" type="search" name="q" value="{{ query }}" placeholder="Descripcion XML, codigo, producto o entidad">
+            </div>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label" for="estado">Estado</label>
+                <select class="form-select" id="estado" name="estado">
+                    <option value="todos" {% if estado == "todos" %}selected{% endif %}>Todos</option>
+                    <option value="activos" {% if estado == "activos" %}selected{% endif %}>Activos</option>
+                    <option value="inactivos" {% if estado == "inactivos" %}selected{% endif %}>Inactivos</option>
+                </select>
+            </div>
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label" for="alcance">Alcance</label>
+                <select class="form-select" id="alcance" name="alcance">
+                    <option value="" {% if not alcance %}selected{% endif %}>Todos</option>
+                    <option value="global" {% if alcance == "global" %}selected{% endif %}>Global</option>
+                    <option value="entidad" {% if alcance == "entidad" %}selected{% endif %}>Por entidad</option>
+                </select>
+            </div>
+            <div class="col-lg-3 d-flex gap-2">
+                <button class="btn btn-primary flex-fill" type="submit">Filtrar</button>
+                <a class="btn btn-outline-secondary" href="{% url 'kardex:equivalencias_xml_lista' %}">Limpiar</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="data-card">
+    <div class="table-responsive">
+        <table class="table app-table align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Producto XML</th>
+                <th>Entidad</th>
+                <th>Producto interno</th>
+                <th class="text-end">Factor</th>
+                <th>Estado</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for equivalencia in equivalencias %}
+                <tr>
+                    <td>
+                        <div class="fw-semibold">{{ equivalencia.descripcion_xml }}</div>
+                        <div class="small text-secondary">
+                            Codigo: {{ equivalencia.codigo_producto_xml|default:"-" }} - Unidad: {{ equivalencia.unidad_medida_xml }}
+                        </div>
+                    </td>
+                    <td>
+                        {% if equivalencia.entidad %}
+                            <div class="fw-semibold">{{ equivalencia.entidad.razon_social }}</div>
+                            <div class="small text-secondary">{{ equivalencia.entidad.numero_documento }}</div>
+                        {% else %}
+                            <span class="badge text-bg-primary">Global</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="fw-semibold">{{ equivalencia.producto.nombre }}</div>
+                        <div class="small text-secondary">{{ equivalencia.producto.codigo_interno }} - {{ equivalencia.producto.unidad_base }}</div>
+                    </td>
+                    <td class="text-end">{{ equivalencia.factor_conversion|numero }}</td>
+                    <td>
+                        {% if equivalencia.activo %}
+                            <span class="badge text-bg-success">Activo</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="d-flex flex-wrap justify-content-end gap-2">
+                            <a class="btn btn-sm btn-outline-primary" href="{% url 'kardex:equivalencia_xml_editar' equivalencia.id %}">Editar</a>
+                            <form method="post" action="{% url 'kardex:equivalencia_xml_toggle' equivalencia.id %}">
+                                {% csrf_token %}
+                                {% if equivalencia.activo %}
+                                    <button class="btn btn-sm btn-outline-secondary" type="submit">Desactivar</button>
+                                {% else %}
+                                    <button class="btn btn-sm btn-outline-success" type="submit">Activar</button>
+                                {% endif %}
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <div class="empty-state-title">No hay equivalencias XML</div>
+                            <div class="empty-state-text">Crea una equivalencia o ajusta los filtros de busqueda.</div>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

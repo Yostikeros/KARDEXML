@@ -1,0 +1,73 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h1 class="h3 mb-0">{{ titulo }}</h1>
+            <a class="btn btn-outline-secondary" href="{% url 'kardex:productos_lista' %}">Volver</a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label" for="{{ form.codigo_interno.id_for_label }}">{{ form.codigo_interno.label }}</label>
+                            {{ form.codigo_interno }}
+                            {% for error in form.codigo_interno.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label" for="{{ form.nombre.id_for_label }}">{{ form.nombre.label }}</label>
+                            {{ form.nombre }}
+                            {% for error in form.nombre.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.categoria.id_for_label }}">{{ form.categoria.label }}</label>
+                            {{ form.categoria }}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.tipo_producto.id_for_label }}">{{ form.tipo_producto.label }}</label>
+                            {{ form.tipo_producto }}
+                            {% for error in form.tipo_producto.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="{{ form.unidad_base.id_for_label }}">{{ form.unidad_base.label }}</label>
+                            {{ form.unidad_base }}
+                        </div>
+                        <div class="col-md-8 d-flex align-items-end gap-4">
+                            <div class="form-check mb-2">
+                                {{ form.controla_stock }}
+                                <label class="form-check-label" for="{{ form.controla_stock.id_for_label }}">{{ form.controla_stock.label }}</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                {{ form.afecta_kardex }}
+                                <label class="form-check-label" for="{{ form.afecta_kardex.id_for_label }}">{{ form.afecta_kardex.label }}</label>
+                            </div>
+                            <div class="form-check mb-2">
+                                {{ form.activo }}
+                                <label class="form-check-label" for="{{ form.activo.id_for_label }}">{{ form.activo.label }}</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger mt-3">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="mt-4">
+                        <button class="btn btn-primary" type="submit">Guardar producto</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

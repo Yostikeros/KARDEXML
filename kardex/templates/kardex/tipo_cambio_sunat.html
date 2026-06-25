@@ -1,0 +1,81 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="page-heading">
+    <div>
+        <h1>Tipo de cambio SUNAT</h1>
+        <p>Importa compra y venta mensual para convertir documentos USD a PEN.</p>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.mes.id_for_label }}">{{ form.mes.label }}</label>
+                        {{ form.mes }}
+                        {% for error in form.mes.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.anio.id_for_label }}">{{ form.anio.label }}</label>
+                        {{ form.anio }}
+                        {% for error in form.anio.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+                    <button class="btn btn-primary w-100" type="submit">Importar desde SUNAT</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="data-card">
+            <div class="data-card-header">
+                <div>
+                    <h2>Tipos de cambio guardados</h2>
+                    <p>Ultimos registros disponibles para conversion de moneda extranjera.</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table app-table align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th class="text-end">Compra</th>
+                        <th class="text-end">Venta</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for tc in tipos_cambio %}
+                        <tr>
+                            <td>{{ tc.dia }} {{ tc.mes }} {{ tc.anio }}</td>
+                            <td class="text-end">{{ tc.compra }}</td>
+                            <td class="text-end">{{ tc.venta }}</td>
+                        </tr>
+                    {% empty %}
+                        <tr>
+                            <td colspan="3">
+                                <div class="empty-state">
+                                    <div class="empty-state-title">No hay tipos de cambio</div>
+                                    <div class="empty-state-text">Importa un mes antes de cargar XML en USD.</div>
+                                </div>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

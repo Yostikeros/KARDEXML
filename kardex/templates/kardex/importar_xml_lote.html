@@ -1,0 +1,83 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h1 class="h3 mb-0">Importar XML en lote</h1>
+            <a class="btn btn-outline-secondary" href="{% url 'kardex:dashboard' %}">Volver</a>
+        </div>
+
+        {% if messages %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+            {% endfor %}
+        {% endif %}
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.archivos.id_for_label }}">{{ form.archivos.label }}</label>
+                        {{ form.archivos }}
+                        <div class="form-text">{{ form.archivos.help_text }}</div>
+                        {% for error in form.archivos.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <button class="btn btn-primary" type="submit">Importar lote</button>
+                </form>
+            </div>
+        </div>
+
+        {% if resultados %}
+            <div class="card">
+                <div class="card-header bg-white fw-semibold">Resultado de importacion</div>
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead>
+                        <tr>
+                            <th>Archivo</th>
+                            <th>Estado</th>
+                            <th>Documento</th>
+                            <th class="text-end">Detalles</th>
+                            <th class="text-end">Entidades nuevas</th>
+                            <th class="text-end">Pendientes</th>
+                            <th>Mensaje</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for result in resultados %}
+                            <tr>
+                                <td>{{ result.filename }}</td>
+                                <td>
+                                    {% if result.ok %}
+                                        <span class="badge text-bg-success">OK</span>
+                                    {% else %}
+                                        <span class="badge text-bg-danger">Error</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if result.documento %}
+                                        <a href="/admin/kardex/documento/{{ result.documento.id }}/change/">{{ result.documento }}</a>
+                                        <div class="small text-secondary">{{ result.documento.tipo_documento_nombre }}</div>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">{{ result.detalles_creados }}</td>
+                                <td class="text-end">{{ result.entidades_creadas }}</td>
+                                <td class="text-end">{{ result.pendientes_clasificacion }}</td>
+                                <td>{{ result.message }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+

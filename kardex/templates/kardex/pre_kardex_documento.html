@@ -1,0 +1,77 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h1 class="h3 mb-1">Pre-Kardex {{ documento }}</h1>
+        <div class="text-secondary">
+            {{ documento.fecha_emision|fecha_corta }} - {{ documento.tipo_documento_nombre }} - {{ documento.get_estado_display }}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'kardex:clasificar_documento' documento.id %}">Clasificacion</a>
+        {% if documento.estado == "pre_kardex" %}
+            <form method="post" action="{% url 'kardex:revertir_pre_kardex' documento.id %}">
+                {% csrf_token %}
+                <button class="btn btn-outline-danger" type="submit">Quitar de Pre-Kardex</button>
+            </form>
+            <form method="post" action="{% url 'kardex:confirmar_kardex_documento' documento.id %}">
+                {% csrf_token %}
+                <button class="btn btn-success" type="submit">Aprobar Pre-Kardex</button>
+            </form>
+        {% elif documento.estado == "confirmado" %}
+            <span class="btn btn-outline-success disabled">Aprobado</span>
+            <form method="post" action="{% url 'kardex:revertir_aprobacion_kardex' documento.id %}">
+                {% csrf_token %}
+                <button class="btn btn-outline-danger" type="submit">Revertir aprobacion</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Entidad</th>
+                <th>Producto</th>
+                <th>Movimiento</th>
+                <th class="text-end">Cantidad XML</th>
+                <th>Unidad XML</th>
+                <th class="text-end">Factor</th>
+                <th class="text-end">Cantidad base</th>
+                <th class="text-end">Costo/Precio unit.</th>
+                <th class="text-end">Importe</th>
+                <th>Observacion</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in items %}
+                <tr>
+                    <td>{{ item.fecha|fecha_corta }}</td>
+                    <td>{{ item.entidad }}</td>
+                    <td>{{ item.producto|default:"-" }}</td>
+                    <td>{{ item.tipo_movimiento }}</td>
+                    <td class="text-end">{{ item.cantidad_xml|numero }}</td>
+                    <td>{{ item.unidad_xml }}</td>
+                    <td class="text-end">{{ item.factor_conversion|numero }}</td>
+                    <td class="text-end">{{ item.cantidad_base|numero }}</td>
+                    <td class="text-end">{{ item.costo_precio_unitario|numero }}</td>
+                    <td class="text-end">{{ item.importe_total|numero }}</td>
+                    <td>{{ item.observacion }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

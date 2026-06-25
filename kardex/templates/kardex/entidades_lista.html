@@ -1,0 +1,122 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>Entidades</h1>
+        <p>Clientes, proveedores y terceros importados desde XML</p>
+    </div>
+    <a class="btn app-btn-primary" href="{% url 'kardex:entidad_crear' %}">
+        <span class="btn-icon">+</span>
+        Nueva entidad
+    </a>
+</div>
+
+<div class="data-card mb-3">
+    <div class="data-card-header">
+        <div>
+            <h2>Filtros</h2>
+            <p>Busca por documento, razon social o rol comercial</p>
+        </div>
+    </div>
+    <div class="p-3">
+        <form class="row g-2 align-items-end" method="get">
+            <div class="col-md-5">
+                <label class="form-label" for="q">Buscar</label>
+                <input class="form-control" id="q" name="q" value="{{ request.GET.q }}" placeholder="RUC, DNI o razon social">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="rol">Rol</label>
+                <select class="form-select" id="rol" name="rol">
+                    <option value="" {% if not request.GET.rol %}selected{% endif %}>Todos</option>
+                    <option value="clientes" {% if request.GET.rol == "clientes" %}selected{% endif %}>Clientes</option>
+                    <option value="proveedores" {% if request.GET.rol == "proveedores" %}selected{% endif %}>Proveedores</option>
+                    <option value="ambos" {% if request.GET.rol == "ambos" %}selected{% endif %}>Ambos</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="estado">Estado</label>
+                <select class="form-select" id="estado" name="estado">
+                    <option value="" {% if not request.GET.estado %}selected{% endif %}>Todos</option>
+                    <option value="activos" {% if request.GET.estado == "activos" %}selected{% endif %}>Activos</option>
+                    <option value="inactivos" {% if request.GET.estado == "inactivos" %}selected{% endif %}>Inactivos</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-grid">
+                <button class="btn btn-primary" type="submit">Filtrar</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="data-card">
+    <div class="data-card-header">
+        <div>
+            <h2>Listado de entidades</h2>
+            <p>{{ entidades|length }} registro(s) encontrados</p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table app-table align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Documento</th>
+                <th>Razon social</th>
+                <th>Ubicacion</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th class="text-end">Acciones</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for entidad in entidades %}
+                <tr>
+                    <td>
+                        <div class="fw-semibold">{{ entidad.tipo_documento_identidad }}</div>
+                        <div class="small text-secondary">{{ entidad.numero_documento }}</div>
+                    </td>
+                    <td class="product-cell">
+                        <div class="fw-semibold">{{ entidad.razon_social }}</div>
+                        {% if entidad.nombre_comercial %}<div class="small text-secondary">{{ entidad.nombre_comercial }}</div>{% endif %}
+                    </td>
+                    <td>
+                        <div>{{ entidad.distrito|default:"-" }}</div>
+                        <div class="small text-secondary">{{ entidad.provincia }} {{ entidad.departamento }}</div>
+                    </td>
+                    <td>
+                        {% if entidad.es_cliente %}<span class="movement-badge movement-adjust me-1">Cliente</span>{% endif %}
+                        {% if entidad.es_proveedor %}<span class="movement-badge movement-in">Proveedor</span>{% endif %}
+                        {% if not entidad.es_cliente and not entidad.es_proveedor %}<span class="movement-badge movement-neutral">Sin rol</span>{% endif %}
+                    </td>
+                    <td>
+                        {% if entidad.activo %}
+                            <span class="movement-badge movement-in">Activo</span>
+                        {% else %}
+                            <span class="movement-badge movement-neutral">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a class="btn btn-outline-primary" href="{% url 'kardex:entidad_editar' entidad.id %}">Editar</a>
+                            <form method="post" action="{% url 'kardex:entidad_toggle' entidad.id %}">
+                                {% csrf_token %}
+                                <button class="btn btn-outline-secondary" type="submit">{% if entidad.activo %}Desactivar{% else %}Activar{% endif %}</button>
+                            </form>
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="6">
+                        <div class="empty-state">
+                            <div class="empty-state-title">No hay entidades</div>
+                            <div class="empty-state-text">Importa XML o registra una entidad manualmente.</div>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

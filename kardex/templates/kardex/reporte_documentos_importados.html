@@ -1,0 +1,69 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Documentos importados</h1>
+    <a class="btn btn-outline-secondary" href="{% url 'kardex:reportes_index' %}">Reportes</a>
+</div>
+
+<form class="card mb-3" method="get">
+    <div class="card-body">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label" for="estado">Estado</label>
+                <select class="form-select" id="estado" name="estado">
+                    <option value="">Todos</option>
+                    {% for value, label in estados %}
+                        <option value="{{ value }}" {% if estado == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <button class="btn btn-primary" type="submit">Filtrar</button>
+                <button class="btn btn-outline-success" type="submit" name="export" value="excel">Exportar Excel</button>
+                <a class="btn btn-outline-secondary" href="{% url 'kardex:reporte_documentos_importados' %}">Limpiar</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Documento</th>
+                <th>Fecha</th>
+                <th>Operacion</th>
+                <th>Entidad</th>
+                <th>Estado</th>
+                <th class="text-end">Total</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for doc in documentos %}
+                <tr>
+                    <td>{{ doc }}</td>
+                    <td>{{ doc.fecha_emision|fecha_corta }}</td>
+                    <td>{{ doc.tipo_operacion_nombre }}</td>
+                    <td>{{ doc.proveedor|default:doc.cliente|default:doc.entidad_emisor }}</td>
+                    <td>{{ doc.get_estado_display }}</td>
+                    <td class="text-end">{{ doc.total|numero }}</td>
+                    <td class="text-end">
+                        {% if doc.estado == "pendiente_clasificacion" %}
+                            <a class="btn btn-sm btn-outline-primary" href="{% url 'kardex:clasificar_documento' doc.id %}">Clasificar</a>
+                        {% else %}
+                            <a class="btn btn-sm btn-outline-primary" href="{% url 'kardex:pre_kardex_documento' doc.id %}">Ver</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="7" class="text-secondary">No hay documentos para el filtro seleccionado.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

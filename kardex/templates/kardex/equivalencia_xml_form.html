@@ -1,0 +1,73 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-xl-9 col-lg-10">
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+            <div>
+                <h1 class="h3 mb-1">{{ titulo }}</h1>
+                <div class="text-secondary">Define como se traduce una linea del XML a un producto interno.</div>
+            </div>
+            <a class="btn btn-outline-secondary" href="{% url 'kardex:equivalencias_xml_lista' %}">Volver</a>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.entidad.id_for_label }}">{{ form.entidad.label }}</label>
+                            {{ form.entidad }}
+                            {% if form.entidad.help_text %}<div class="form-text">{{ form.entidad.help_text }}</div>{% endif %}
+                            {% for error in form.entidad.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.producto.id_for_label }}">{{ form.producto.label }}</label>
+                            {{ form.producto }}
+                            {% for error in form.producto.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="{{ form.codigo_producto_xml.id_for_label }}">{{ form.codigo_producto_xml.label }}</label>
+                            {{ form.codigo_producto_xml }}
+                            {% for error in form.codigo_producto_xml.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.descripcion_xml.id_for_label }}">{{ form.descripcion_xml.label }}</label>
+                            {{ form.descripcion_xml }}
+                            {% for error in form.descripcion_xml.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="{{ form.unidad_medida_xml.id_for_label }}">{{ form.unidad_medida_xml.label }}</label>
+                            {{ form.unidad_medida_xml }}
+                            {% for error in form.unidad_medida_xml.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="{{ form.factor_conversion.id_for_label }}">{{ form.factor_conversion.label }}</label>
+                            {{ form.factor_conversion }}
+                            {% if form.factor_conversion.help_text %}<div class="form-text">{{ form.factor_conversion.help_text }}</div>{% endif %}
+                            {% for error in form.factor_conversion.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-8 d-flex align-items-end">
+                            <div class="form-check mb-2">
+                                {{ form.activo }}
+                                <label class="form-check-label" for="{{ form.activo.id_for_label }}">{{ form.activo.label }}</label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2 mt-4">
+                        <button class="btn btn-primary" type="submit">Guardar equivalencia</button>
+                        <a class="btn btn-outline-secondary" href="{% url 'kardex:equivalencias_xml_lista' %}">Cancelar</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+.venv-*/
+venv/
+env/
+
+# Django/local runtime
+db.sqlite3
+*.sqlite3
+*.log
+runserver*.log
+media/
+staticfiles/
+
+# Environment/secrets
+.env
+.env.*
+!.env.example
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Local agent/work artifacts
+.agents/

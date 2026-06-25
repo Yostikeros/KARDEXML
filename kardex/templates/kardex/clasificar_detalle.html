@@ -1,0 +1,76 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h1 class="h3 mb-0">Clasificar detalle</h1>
+            <a class="btn btn-outline-secondary" href="{% url 'kardex:clasificar_documento' documento.id %}">Volver</a>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Documento</div>
+                        <div class="fw-semibold">{{ documento }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Codigo XML</div>
+                        <div class="fw-semibold">{{ detalle.codigo_producto_xml|default:"-" }}</div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-secondary small">Cantidad XML</div>
+                        <div class="fw-semibold">{{ detalle.cantidad|numero }} {{ detalle.unidad_medida_xml }}</div>
+                    </div>
+                    <div class="col-12">
+                        <div class="text-secondary small">Descripcion XML</div>
+                        <div class="fw-semibold">{{ detalle.descripcion_xml }}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.producto.id_for_label }}">{{ form.producto.label }}</label>
+                        {{ form.producto }}
+                        {% for error in form.producto.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.factor_conversion.id_for_label }}">{{ form.factor_conversion.label }}</label>
+                        {{ form.factor_conversion }}
+                        <div class="form-text">Cantidad base = cantidad XML por factor.</div>
+                        {% for error in form.factor_conversion.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="form-check mb-2">
+                        {{ form.guardar_equivalencia }}
+                        <label class="form-check-label" for="{{ form.guardar_equivalencia.id_for_label }}">{{ form.guardar_equivalencia.label }}</label>
+                    </div>
+                    <div class="form-check mb-3">
+                        {{ form.equivalencia_global }}
+                        <label class="form-check-label" for="{{ form.equivalencia_global.id_for_label }}">{{ form.equivalencia_global.label }}</label>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button class="btn btn-primary" type="submit">Guardar clasificacion</button>
+                    </div>
+                </form>
+                {% if detalle.estado_clasificacion == "pendiente" %}
+                    <form class="mt-2" method="post" action="{% url 'kardex:excluir_detalle_kardex' detalle.id %}">
+                        {% csrf_token %}
+                        <button class="btn btn-outline-secondary" type="submit">No tomar este item en Kardex</button>
+                    </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

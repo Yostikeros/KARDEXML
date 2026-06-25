@@ -1,0 +1,183 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="page-heading">
+    <div>
+        <h1>Documentos importados</h1>
+        <p>Comprobantes XML cargados al sistema</p>
+    </div>
+    <a class="btn app-btn-primary" href="{% url 'kardex:importar_xml_lote' %}">
+        <span class="btn-icon">+</span>
+        Importar XML
+    </a>
+</div>
+
+<form class="card mb-3" method="get">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-sm-6 col-lg-3">
+                <label class="form-label" for="tipo-documento">Tipo de documento</label>
+                <select class="form-select" id="tipo-documento" name="tipo_documento">
+                    <option value="">Todos</option>
+                    {% for codigo, nombre in tipos_documento %}
+                        <option value="{{ codigo }}" {% if tipo_documento == codigo %}selected{% endif %}>{{ nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <label class="form-label" for="documento-busqueda">Documento</label>
+                <input class="form-control" id="documento-busqueda" name="documento" value="{{ documento_busqueda }}" placeholder="Serie, numero o tipo">
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <label class="form-label" for="orden-documentos">Ordenar por</label>
+                <select class="form-select" id="orden-documentos" name="orden">
+                    <option value="fecha" {% if orden == "fecha" %}selected{% endif %}>Fecha de emision</option>
+                    <option value="tipo_documento" {% if orden == "tipo_documento" %}selected{% endif %}>Tipo de documento</option>
+                    <option value="estado" {% if orden == "estado" %}selected{% endif %}>Estado</option>
+                </select>
+            </div>
+            <div class="col-sm-6 col-lg-2">
+                <button class="btn btn-outline-primary w-100" type="submit">Aplicar</button>
+            </div>
+            <div class="col-sm-6 col-lg-1">
+                <a class="btn btn-outline-secondary w-100" href="{% url 'kardex:documentos_lista' %}">Limpiar</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<form id="clasificar-documentos-form" method="post" action="{% url 'kardex:clasificar_documentos_bloque' %}">
+    {% csrf_token %}
+<div class="data-card">
+    <div class="data-card-header">
+        <div class="me-lg-3">
+            <h2>Listado de documentos</h2>
+            <p>Revisa estado, entidad y total del comprobante</p>
+        </div>
+        <div class="row g-2 align-items-end flex-grow-1">
+            <div class="col-lg-4">
+                <label class="form-label small mb-1" for="{{ form.producto.id_for_label }}">{{ form.producto.label }}</label>
+                {{ form.producto }}
+            </div>
+            <div class="col-sm-6 col-lg-2">
+                <label class="form-label small mb-1" for="{{ form.factor_conversion.id_for_label }}">{{ form.factor_conversion.label }}</label>
+                {{ form.factor_conversion }}
+            </div>
+            <div class="col-sm-6 col-lg-3">
+                <div class="form-check">
+                    {{ form.guardar_equivalencia }}
+                    <label class="form-check-label small" for="{{ form.guardar_equivalencia.id_for_label }}">{{ form.guardar_equivalencia.label }}</label>
+                </div>
+                <div class="form-check">
+                    {{ form.equivalencia_global }}
+                    <label class="form-check-label small" for="{{ form.equivalencia_global.id_for_label }}">{{ form.equivalencia_global.label }}</label>
+                </div>
+            </div>
+            <div class="col-lg-3">
+                <div class="d-flex flex-wrap justify-content-lg-end gap-2">
+                    <button class="btn btn-outline-secondary btn-sm" type="button" data-select-documentos="all">Todos</button>
+                    <button class="btn btn-outline-secondary btn-sm" type="button" data-select-documentos="none">Ninguno</button>
+                    <button class="btn btn-primary btn-sm" type="submit">Clasificar lote</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table app-table align-middle mb-0">
+            <thead>
+            <tr>
+                <th style="width:44px;"></th>
+                <th>Fecha</th>
+                <th>Documento</th>
+                <th>Operacion</th>
+                <th>Entidad</th>
+                <th>Estado</th>
+                <th class="text-end">Total</th>
+                <th class="text-end">Acciones</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for doc in documentos %}
+                <tr>
+                    <td>
+                        {% if doc.estado == "pendiente_clasificacion" %}
+                            <input class="form-check-input js-documento-check" type="checkbox" name="documento_ids" value="{{ doc.id }}" aria-label="Seleccionar {{ doc }}">
+                        {% endif %}
+                    </td>
+                    <td class="date-cell">{{ doc.fecha_emision|fecha_corta }}</td>
+                    <td>
+                        <div class="fw-semibold">{{ doc.tipo_documento_nombre }}</div>
+                        <div class="small text-secondary">{{ doc.tipo_documento }}-{{ doc.serie }}-{{ doc.numero }}</div>
+                    </td>
+                    <td>{{ doc.tipo_operacion_nombre }}</td>
+                    <td class="product-cell">
+                        {% if doc.proveedor %}
+                            <div class="fw-semibold">{{ doc.proveedor.razon_social }}</div>
+                            <div class="small text-secondary">Proveedor - {{ doc.proveedor.tipo_documento_identidad }} {{ doc.proveedor.numero_documento }}</div>
+                        {% elif doc.cliente %}
+                            <div class="fw-semibold">{{ doc.cliente.razon_social }}</div>
+                            <div class="small text-secondary">Cliente - {{ doc.cliente.tipo_documento_identidad }} {{ doc.cliente.numero_documento }}</div>
+                        {% else %}
+                            <div class="fw-semibold">{{ doc.entidad_emisor.razon_social }}</div>
+                            <div class="small text-secondary">{{ doc.entidad_emisor.numero_documento }}</div>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if doc.estado == "confirmado" %}
+                            <span class="movement-badge movement-in">Confirmado</span>
+                        {% elif doc.estado == "pendiente_clasificacion" %}
+                            <span class="movement-badge movement-out">Pendiente</span>
+                        {% elif doc.estado == "pre_kardex" %}
+                            <span class="movement-badge movement-adjust">Pre-Kardex</span>
+                        {% else %}
+                            <span class="movement-badge movement-neutral">{{ doc.get_estado_display }}</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">{{ doc.total|numero }}</td>
+                    <td class="text-end">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <a class="btn btn-outline-primary" href="{% url 'kardex:comprobante_documento' doc.id %}">Ver</a>
+                            {% if doc.estado == "pendiente_clasificacion" %}
+                                <a class="btn btn-outline-primary" href="{% url 'kardex:clasificar_documento' doc.id %}">Clasificar</a>
+                            {% elif doc.estado == "pre_kardex" %}
+                                <a class="btn btn-outline-primary" href="{% url 'kardex:pre_kardex_documento' doc.id %}">Pre-Kardex</a>
+                            {% elif doc.estado == "confirmado" %}
+                                <a class="btn btn-outline-primary" href="{% url 'kardex:pre_kardex_documento' doc.id %}">Kardex</a>
+                            {% endif %}
+                        </div>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="8">
+                        <div class="empty-state">
+                            <div class="empty-state-title">Aun no hay documentos</div>
+                            <div class="empty-state-text">Importa archivos XML para comenzar.</div>
+                        </div>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+</form>
+
+<script>
+document.addEventListener('click', function (event) {
+    var action = event.target.getAttribute('data-select-documentos');
+    if (!action) return;
+    document.querySelectorAll('.js-documento-check').forEach(function (checkbox) {
+        checkbox.checked = action === 'all';
+    });
+});
+</script>
+{% endblock %}
+

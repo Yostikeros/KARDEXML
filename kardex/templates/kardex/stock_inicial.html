@@ -1,0 +1,102 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <h1 class="h3 mb-0">Stock inicial</h1>
+    <a class="btn btn-outline-secondary" href="{% url 'kardex:reporte_stock_actual' %}">Ver stock actual</a>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-5">
+        <div class="card">
+            <div class="card-header bg-white fw-semibold">Registrar saldo inicial</div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.fecha.id_for_label }}">{{ form.fecha.label }}</label>
+                        {{ form.fecha }}
+                        {% for error in form.fecha.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.producto.id_for_label }}">{{ form.producto.label }}</label>
+                        {{ form.producto }}
+                        {% for error in form.producto.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.cantidad.id_for_label }}">{{ form.cantidad.label }}</label>
+                            {{ form.cantidad }}
+                            {% for error in form.cantidad.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.costo_unitario.id_for_label }}">{{ form.costo_unitario.label }}</label>
+                            {{ form.costo_unitario }}
+                            {% for error in form.costo_unitario.errors %}
+                                <div class="text-danger small">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.observacion.id_for_label }}">{{ form.observacion.label }}</label>
+                        {{ form.observacion }}
+                        {% for error in form.observacion.errors %}
+                            <div class="text-danger small">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <button class="btn btn-primary" type="submit">Registrar stock inicial</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card">
+            <div class="card-header bg-white fw-semibold">Saldos iniciales registrados</div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Producto</th>
+                        <th class="text-end">Cantidad</th>
+                        <th class="text-end">Costo unit.</th>
+                        <th class="text-end">Valor total</th>
+                        <th></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for mov in stocks_iniciales %}
+                        <tr>
+                            <td>{{ mov.fecha|fecha_corta }}</td>
+                            <td>{{ mov.producto }}</td>
+                            <td class="text-end">{{ mov.cantidad_entrada|numero }}</td>
+                            <td class="text-end">{{ mov.costo_unitario_entrada|numero }}</td>
+                            <td class="text-end">{{ mov.costo_total_entrada|numero }}</td>
+                            <td class="text-end">
+                                <a class="btn btn-sm btn-outline-primary" href="{% url 'kardex:editar_stock_inicial' mov.id %}">Editar</a>
+                            </td>
+                        </tr>
+                    {% empty %}
+                        <tr><td colspan="6" class="text-secondary">Aun no hay stocks iniciales registrados.</td></tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

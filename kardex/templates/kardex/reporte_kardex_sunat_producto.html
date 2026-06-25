@@ -1,0 +1,124 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h1 class="h3 mb-1">Kardex valorizado SUNAT</h1>
+        <div class="text-secondary">Formato 13.1 - Registro de Inventario Permanente Valorizado</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'kardex:reportes_index' %}">Reportes</a>
+</div>
+
+<form class="card mb-3" method="get">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-5">
+                <label class="form-label" for="producto">Producto</label>
+                <select class="form-select" id="producto" name="producto" required>
+                    <option value="">Selecciona un producto</option>
+                    {% for producto in productos %}
+                        <option value="{{ producto.id }}" {% if producto_seleccionado and producto.id == producto_seleccionado.id %}selected{% endif %}>
+                            {{ producto.codigo_interno }} - {{ producto.nombre }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-lg-2">
+                <label class="form-label" for="fecha_inicio">Desde</label>
+                <input class="form-control" id="fecha_inicio" name="fecha_inicio" type="date" value="{{ fecha_inicio }}">
+            </div>
+            <div class="col-sm-6 col-lg-2">
+                <label class="form-label" for="fecha_fin">Hasta</label>
+                <input class="form-control" id="fecha_fin" name="fecha_fin" type="date" value="{{ fecha_fin }}">
+            </div>
+            <div class="col-lg-3">
+                <button class="btn btn-primary" type="submit">Generar</button>
+                <button class="btn btn-outline-success" type="submit" name="export" value="excel">Exportar Excel</button>
+                <a class="btn btn-outline-secondary" href="{% url 'kardex:reporte_kardex_sunat_producto' %}">Limpiar</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+{% if producto_seleccionado %}
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="text-center fw-semibold mb-3">
+            FORMATO 13.1: "REGISTRO DE INVENTARIO PERMANENTE VALORIZADO - DETALLE DEL INVENTARIO VALORIZADO"
+        </div>
+        <div class="row g-2 small">
+            <div class="col-md-4"><span class="fw-semibold">Periodo:</span> {% if fecha_inicio or fecha_fin %}{{ fecha_inicio|default:"..." }} al {{ fecha_fin|default:"..." }}{% else %}Todos los movimientos{% endif %}</div>
+            <div class="col-md-4"><span class="fw-semibold">RUC:</span> {{ empresa.ruc|default:"-" }}</div>
+            <div class="col-md-4"><span class="fw-semibold">Razon social:</span> {{ empresa.razon_social|default:"-" }}</div>
+            <div class="col-md-4"><span class="fw-semibold">Establecimiento:</span> {{ empresa.direccion|default:"Principal" }}</div>
+            <div class="col-md-4"><span class="fw-semibold">Codigo de existencia:</span> {{ producto_seleccionado.codigo_interno }}</div>
+            <div class="col-md-4"><span class="fw-semibold">Tipo de existencia:</span> {{ producto_seleccionado.get_tipo_producto_display }}</div>
+            <div class="col-md-4"><span class="fw-semibold">Descripcion:</span> {{ producto_seleccionado.nombre }}</div>
+            <div class="col-md-4"><span class="fw-semibold">Unidad de medida:</span> {{ producto_seleccionado.unidad_base }}</div>
+            <div class="col-md-4"><span class="fw-semibold">Metodo de valuacion:</span> Promedio ponderado</div>
+        </div>
+    </div>
+</div>
+
+<div class="sunat-table-wrapper">
+        <table class="table table-sm table-bordered align-middle mb-0 sunat-table">
+            <thead class="table-light">
+            <tr class="text-center">
+                <th class="date" rowspan="2">Fecha</th>
+                <th colspan="3">Documento de traslado, comprobante de pago, documento interno o similar</th>
+                <th rowspan="2">Tipo de operacion</th>
+                <th colspan="3">Entradas</th>
+                <th colspan="3">Salidas</th>
+                <th colspan="3">Saldo final</th>
+            </tr>
+            <tr class="text-center">
+                <th class="doc-cell">Tipo</th>
+                <th class="doc-cell">Serie</th>
+                <th class="doc-cell">Numero</th>
+                <th class="numeric">Cantidad</th>
+                <th class="numeric">Costo unitario</th>
+                <th class="numeric">Costo total</th>
+                <th class="numeric">Cantidad</th>
+                <th class="numeric">Costo unitario</th>
+                <th class="numeric">Costo total</th>
+                <th class="numeric">Cantidad</th>
+                <th class="numeric">Costo unitario</th>
+                <th class="numeric">Costo total</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for fila in filas %}
+                {% with mov=fila.movimiento %}
+                    <tr>
+                        <td class="date-cell">{{ mov.fecha|fecha_corta }}</td>
+                        <td class="doc-cell">{{ fila.tipo_documento }}</td>
+                        <td class="doc-cell">{{ fila.serie }}</td>
+                        <td class="doc-cell">{{ fila.numero }}</td>
+                        <td class="operation-cell">{{ fila.tipo_operacion }}</td>
+                        <td class="numeric">{{ mov.cantidad_entrada|numero }}</td>
+                        <td class="numeric">{{ mov.costo_unitario_entrada|numero }}</td>
+                        <td class="numeric">{{ mov.costo_total_entrada|numero }}</td>
+                        <td class="numeric">{{ mov.cantidad_salida|numero }}</td>
+                        <td class="numeric">{{ mov.costo_unitario_salida|numero }}</td>
+                        <td class="numeric">{{ mov.costo_total_salida|numero }}</td>
+                        <td class="numeric">{{ mov.stock_cantidad|numero }}</td>
+                        <td class="numeric">{{ mov.stock_costo_unitario_promedio|numero }}</td>
+                        <td class="numeric">{{ mov.stock_costo_total|numero }}</td>
+                    </tr>
+                {% endwith %}
+            {% empty %}
+                <tr>
+                    <td colspan="14" class="text-secondary">No hay movimientos para el producto y periodo seleccionado.</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="empty-state-title">Selecciona un producto</div>
+    <div class="empty-state-text">El formato SUNAT 13.1 se genera por cada producto/existencia.</div>
+</div>
+{% endif %}
+{% endblock %}
