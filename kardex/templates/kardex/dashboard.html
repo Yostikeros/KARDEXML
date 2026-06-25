@@ -58,6 +58,202 @@
     </div>
 </div>
 
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label" for="producto">Producto</label>
+                    <select class="form-select" id="producto" name="producto">
+                        <option value="">Vista consolidada</option>
+                        {% for producto in productos_filtro %}
+                            <option value="{{ producto.id }}" {% if analisis.filtros.producto == producto.id|stringformat:"s" %}selected{% endif %}>{{ producto.codigo_interno }} - {{ producto.nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label" for="categoria">Categoria</label>
+                    <select class="form-select" id="categoria" name="categoria">
+                        <option value="">Todas</option>
+                        {% for categoria in categorias_filtro %}
+                            <option value="{{ categoria }}" {% if analisis.filtros.categoria == categoria %}selected{% endif %}>{{ categoria }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label" for="fecha_desde">Desde</label>
+                    <input class="form-control" id="fecha_desde" name="fecha_desde" type="date" value="{{ analisis.filtros.fecha_desde }}">
+                </div>
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label" for="fecha_hasta">Hasta</label>
+                    <input class="form-control" id="fecha_hasta" name="fecha_hasta" type="date" value="{{ analisis.filtros.fecha_hasta }}">
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label" for="proveedor">Proveedor</label>
+                    <select class="form-select" id="proveedor" name="proveedor">
+                        <option value="">Todos</option>
+                        {% for proveedor in proveedores_filtro %}
+                            <option value="{{ proveedor.id }}" {% if analisis.filtros.proveedor == proveedor.id|stringformat:"s" %}selected{% endif %}>{{ proveedor.razon_social }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label" for="cliente">Cliente</label>
+                    <select class="form-select" id="cliente" name="cliente">
+                        <option value="">Todos</option>
+                        {% for cliente in clientes_filtro %}
+                            <option value="{{ cliente.id }}" {% if analisis.filtros.cliente == cliente.id|stringformat:"s" %}selected{% endif %}>{{ cliente.razon_social }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 col-xl-2">
+                    <label class="form-label" for="almacen">Almacen</label>
+                    <select class="form-select" id="almacen" name="almacen">
+                        <option value="principal" selected>Principal</option>
+                    </select>
+                </div>
+                <div class="col-md-6 col-xl-3">
+                    <label class="form-label" for="tipo_documento">Tipo documento</label>
+                    <select class="form-select" id="tipo_documento" name="tipo_documento">
+                        <option value="">Todos</option>
+                        {% for codigo, nombre in tipos_documento_filtro %}
+                            <option value="{{ codigo }}" {% if analisis.filtros.tipo_documento == codigo %}selected{% endif %}>{{ nombre }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-6 col-xl-4">
+                    <button class="btn btn-primary" type="submit">Aplicar analisis</button>
+                    <a class="btn btn-outline-secondary" href="{% url 'kardex:dashboard' %}">Limpiar</a>
+                </div>
+            </div>
+        </form>
+        <div class="form-text mt-3">El filtro de almacen usa el almacen principal porque el modelo actual aun no registra almacenes multiples.</div>
+    </div>
+</div>
+
+<div class="data-card mb-4">
+    <div class="data-card-header">
+        <div>
+            <h2>Compras vs ventas</h2>
+            <p>Analisis cruzado por producto, categoria, fecha, proveedor, cliente y tipo de documento</p>
+        </div>
+        {% if not analisis.promedios_comparables %}
+            <div class="text-secondary small">Selecciona un producto para ver precios y margen unitario sin mezclar existencias distintas.</div>
+        {% endif %}
+    </div>
+    <div class="card-body">
+        <div class="metric-grid dashboard-analysis-grid">
+            <div class="metric-card">
+                <div><div class="metric-label">Kg comprados</div><div class="metric-value">{{ analisis.kpis.kg_comprados|numero }}</div></div>
+            </div>
+            <div class="metric-card">
+                <div><div class="metric-label">Kg vendidos</div><div class="metric-value">{{ analisis.kpis.kg_vendidos|numero }}</div></div>
+            </div>
+            <div class="metric-card">
+                <div><div class="metric-label">Stock final</div><div class="metric-value">{{ analisis.kpis.stock_final|numero }}</div></div>
+            </div>
+            <div class="metric-card">
+                <div><div class="metric-label">Precio prom. compra</div><div class="metric-value metric-value-money">{% if analisis.kpis.precio_promedio_compra is not None %}{{ analisis.kpis.precio_promedio_compra|numero }}{% else %}-{% endif %}</div></div>
+            </div>
+            <div class="metric-card">
+                <div><div class="metric-label">Precio prom. venta</div><div class="metric-value metric-value-money">{% if analisis.kpis.precio_promedio_venta is not None %}{{ analisis.kpis.precio_promedio_venta|numero }}{% else %}-{% endif %}</div></div>
+            </div>
+            <div class="metric-card">
+                <div><div class="metric-label">Margen unitario</div><div class="metric-value metric-value-money">{% if analisis.kpis.margen_bruto_unitario is not None %}{{ analisis.kpis.margen_bruto_unitario|numero }}{% else %}-{% endif %}</div></div>
+            </div>
+            <div class="metric-card">
+                <div><div class="metric-label">Margen bruto total</div><div class="metric-value metric-value-money">{{ analisis.kpis.margen_bruto_total|numero }}</div></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Compras, ventas y stock</h2>
+                <div class="dashboard-chart">
+                    <canvas id="chartComprasVentasStock"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Evolucion de precios</h2>
+                <div class="dashboard-chart">
+                    <canvas id="chartPrecios"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Margen bruto unitario</h2>
+                <div class="dashboard-chart">
+                    <canvas id="chartMargenUnitario"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Valor comprado vs valor vendido</h2>
+                <div class="dashboard-chart">
+                    <canvas id="chartValores"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="data-card mb-4">
+    <div class="data-card-header">
+        <div>
+            <h2>Resumen por producto</h2>
+            <p>Promedios calculados por producto para no mezclar existencias no comparables</p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table app-table align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Producto</th>
+                <th class="numeric">Kg comprados</th>
+                <th class="numeric">Kg vendidos</th>
+                <th class="numeric">Stock final</th>
+                <th class="numeric">Precio compra</th>
+                <th class="numeric">Precio venta</th>
+                <th class="numeric">Costo Kardex</th>
+                <th class="numeric">Margen unit.</th>
+                <th class="numeric">Margen total</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in analisis.resumen_productos %}
+                <tr>
+                    <td class="product-cell">{{ item.producto }}</td>
+                    <td class="numeric">{{ item.kg_comprados|numero }}</td>
+                    <td class="numeric">{{ item.kg_vendidos|numero }}</td>
+                    <td class="numeric">{{ item.stock_final|numero }}</td>
+                    <td class="numeric">{% if item.precio_promedio_compra is not None %}{{ item.precio_promedio_compra|numero }}{% else %}-{% endif %}</td>
+                    <td class="numeric">{% if item.precio_promedio_venta is not None %}{{ item.precio_promedio_venta|numero }}{% else %}-{% endif %}</td>
+                    <td class="numeric">{% if item.costo_promedio_kardex is not None %}{{ item.costo_promedio_kardex|numero }}{% else %}-{% endif %}</td>
+                    <td class="numeric">{% if item.margen_bruto_unitario is not None %}{{ item.margen_bruto_unitario|numero }}{% else %}-{% endif %}</td>
+                    <td class="numeric">{{ item.margen_bruto_total|numero }}</td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="9" class="text-secondary">No hay movimientos para los filtros seleccionados.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <div class="data-card">
     <div class="data-card-header">
         <div>
@@ -113,4 +309,81 @@
         </table>
     </div>
 </div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+const labels = {{ analisis.chart_json.periodos|safe }};
+const comprasKg = {{ analisis.chart_json.compras_kg|safe }};
+const ventasKg = {{ analisis.chart_json.ventas_kg|safe }};
+const stockFinal = {{ analisis.chart_json.stock_final|safe }};
+const precioCompra = {{ analisis.chart_json.precio_compra|safe }};
+const precioVenta = {{ analisis.chart_json.precio_venta|safe }};
+const margenUnitario = {{ analisis.chart_json.margen_unitario|safe }};
+const valorComprado = {{ analisis.chart_json.valor_comprado|safe }};
+const valorVendido = {{ analisis.chart_json.valor_vendido|safe }};
+const margenTotal = {{ analisis.chart_json.margen_total|safe }};
+
+const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: { legend: { labels: { boxWidth: 12, font: { size: 12 } } } },
+    scales: {
+        x: { grid: { display: false } },
+        y: { beginAtZero: true, ticks: { font: { size: 11 } } }
+    }
+};
+
+function chartOrEmpty(id, config) {
+    const element = document.getElementById(id);
+    if (!element || !labels.length) return;
+    new Chart(element, config);
+}
+
+chartOrEmpty('chartComprasVentasStock', {
+    data: {
+        labels,
+        datasets: [
+            { type: 'bar', label: 'Kg comprados', data: comprasKg, backgroundColor: 'rgba(37, 99, 235, .72)' },
+            { type: 'bar', label: 'Kg vendidos', data: ventasKg, backgroundColor: 'rgba(16, 185, 129, .72)' },
+            { type: 'line', label: 'Stock final', data: stockFinal, borderColor: '#334155', backgroundColor: '#334155', tension: .25, yAxisID: 'y' }
+        ]
+    },
+    options: commonOptions
+});
+
+chartOrEmpty('chartPrecios', {
+    type: 'line',
+    data: {
+        labels,
+        datasets: [
+            { label: 'Precio promedio compra', data: precioCompra, borderColor: '#2563eb', backgroundColor: '#2563eb', tension: .25 },
+            { label: 'Precio promedio venta', data: precioVenta, borderColor: '#16a34a', backgroundColor: '#16a34a', tension: .25 }
+        ]
+    },
+    options: commonOptions
+});
+
+chartOrEmpty('chartMargenUnitario', {
+    type: 'line',
+    data: {
+        labels,
+        datasets: [
+            { label: 'Margen bruto unitario', data: margenUnitario, borderColor: '#b45309', backgroundColor: '#b45309', tension: .25 }
+        ]
+    },
+    options: commonOptions
+});
+
+chartOrEmpty('chartValores', {
+    data: {
+        labels,
+        datasets: [
+            { type: 'bar', label: 'Valor comprado', data: valorComprado, backgroundColor: 'rgba(37, 99, 235, .72)' },
+            { type: 'bar', label: 'Valor vendido', data: valorVendido, backgroundColor: 'rgba(16, 185, 129, .72)' },
+            { type: 'line', label: 'Margen bruto total', data: margenTotal, borderColor: '#b91c1c', backgroundColor: '#b91c1c', tension: .25 }
+        ]
+    },
+    options: commonOptions
+});
+</script>
 {% endblock %}

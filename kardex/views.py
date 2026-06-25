@@ -25,6 +25,7 @@ from .services.clasificacion import (
     excluir_detalle_kardex,
     generar_pre_kardex,
 )
+from .services.dashboard import obtener_analisis_compras_ventas
 from .services.excel import generar_excel_response
 from .services.kardex import (
     KardexError,
@@ -50,6 +51,17 @@ from .services.xml_importer import importar_xml_lote
 
 @login_required(login_url="/admin/login/")
 def dashboard(request):
+    filtros_analisis = {
+        "producto": request.GET.get("producto") or "",
+        "categoria": request.GET.get("categoria") or "",
+        "fecha_desde": request.GET.get("fecha_desde") or "",
+        "fecha_hasta": request.GET.get("fecha_hasta") or "",
+        "proveedor": request.GET.get("proveedor") or "",
+        "cliente": request.GET.get("cliente") or "",
+        "almacen": request.GET.get("almacen") or "principal",
+        "tipo_documento": request.GET.get("tipo_documento") or "",
+    }
+    analisis = obtener_analisis_compras_ventas(filtros_analisis)
     context = {
         "productos_activos": Producto.objects.filter(activo=True).count(),
         "clientes": Entidad.objects.filter(es_cliente=True, activo=True).count(),
@@ -58,6 +70,12 @@ def dashboard(request):
         "documentos_pendientes": Documento.objects.filter(estado=Documento.PENDIENTE_CLASIFICACION).count(),
         "stock_valorizado_total": obtener_stock_valorizado_total(),
         "ultimos_movimientos": MovimientoKardex.objects.select_related("producto").order_by("-fecha", "-id")[:10],
+        "analisis": analisis,
+        "productos_filtro": Producto.objects.filter(activo=True, controla_stock=True).order_by("nombre"),
+        "categorias_filtro": Producto.objects.exclude(categoria="").values_list("categoria", flat=True).distinct().order_by("categoria"),
+        "proveedores_filtro": Entidad.objects.filter(activo=True, es_proveedor=True).order_by("razon_social"),
+        "clientes_filtro": Entidad.objects.filter(activo=True, es_cliente=True).order_by("razon_social"),
+        "tipos_documento_filtro": Documento.TIPO_DOCUMENTO_LABELS.items(),
     }
     return render(request, "kardex/dashboard.html", context)
 

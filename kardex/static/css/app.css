@@ -428,6 +428,16 @@ h2,
     font-size: 1.35rem;
 }
 
+.dashboard-analysis-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    margin-bottom: 0;
+}
+
+.dashboard-chart {
+    position: relative;
+    min-height: 260px;
+}
+
 .metric-icon-blue { background: #dbeafe; color: #1d4ed8; }
 .metric-icon-green { background: #dcfce7; color: #15803d; }
 .metric-icon-amber { background: #fef3c7; color: #b45309; }
@@ -650,7 +660,8 @@ th.date,
 }
 
 @media (max-width: 1199.98px) {
-    .metric-grid {
+    .metric-grid,
+    .dashboard-analysis-grid {
         grid-template-columns: repeat(3, minmax(0, 1fr));
     }
 }
@@ -691,7 +702,8 @@ th.date,
         width: 100%;
     }
 
-    .metric-grid {
+    .metric-grid,
+    .dashboard-analysis-grid {
         grid-template-columns: 1fr;
     }
 

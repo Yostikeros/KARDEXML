@@ -382,3 +382,17 @@ No deberian aparecer `db.sqlite3`, `.venv/`, `.env`, `*.log` ni `__pycache__/`.
 - Confirmar con XML reales de SUNAT todos los formatos de liquidacion usados por la empresa.
 - Crear respaldo Git/GitHub del estado actual.
 - Revisar politicas de seguridad para produccion: `SECRET_KEY`, `DEBUG`, `ALLOWED_HOSTS` y manejo de credenciales.
+Para guardar tus avances en GitHub usa este ciclo cada vez que termines un cambio importante:
+    git status
+    git add .
+    git commit -m "Describe aqui el cambio"
+    git push
+
+Regla práctica: haz commit cuando algo ya funciona y pasó pruebas. Para este proyecto:
+python manage.py check
+python manage.py test
+git add .
+git commit -m "Cambio realizado"
+git push
+rogger
+_27834801

@@ -19,6 +19,7 @@ from .models import (
     TipoCambioSunat,
 )
 from .services.clasificacion import clasificar_detalle, excluir_detalle_kardex
+from .services.dashboard import obtener_analisis_compras_ventas
 from .services.kardex import (
     KardexError,
     confirmar_documento_kardex,
@@ -1115,6 +1116,169 @@ class XMLImporterTests(TestCase):
         response = self.client.get(reverse('kardex:dashboard'))
 
         self.assertContains(response, reverse('kardex:documentos_lista'))
+
+    def test_dashboard_muestra_analisis_compras_ventas_por_producto(self):
+        producto, proveedor, cliente = self._crear_movimientos_dashboard()
+        user = User.objects.create_user(username='dashboard', password='admin12345')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('kardex:dashboard'), {'producto': str(producto.id)})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Compras vs ventas')
+        self.assertContains(response, 'Resumen por producto')
+        self.assertContains(response, 'chartComprasVentasStock')
+        self.assertContains(response, proveedor.razon_social)
+        self.assertContains(response, cliente.razon_social)
+        analisis = response.context['analisis']
+        self.assertTrue(analisis.promedios_comparables)
+        self.assertEqual(analisis.kpis['kg_comprados'], Decimal('20'))
+        self.assertEqual(analisis.kpis['kg_vendidos'], Decimal('10'))
+        self.assertEqual(analisis.kpis['stock_final'], Decimal('10'))
+        self.assertEqual(analisis.kpis['precio_promedio_compra'], Decimal('10'))
+        self.assertEqual(analisis.kpis['precio_promedio_venta'], Decimal('18'))
+        self.assertEqual(analisis.kpis['margen_bruto_unitario'], Decimal('8'))
+        self.assertEqual(analisis.kpis['margen_bruto_total'], Decimal('80'))
+        self.assertIn('2026-06', analisis.periodos)
+
+    def test_analisis_dashboard_no_mezcla_promedios_consolidados(self):
+        self._crear_movimientos_dashboard()
+
+        analisis = obtener_analisis_compras_ventas({})
+
+        self.assertFalse(analisis.promedios_comparables)
+        self.assertIsNone(analisis.kpis['precio_promedio_compra'])
+        self.assertIsNone(analisis.kpis['precio_promedio_venta'])
+        self.assertIsNone(analisis.kpis['margen_bruto_unitario'])
+        self.assertEqual(len(analisis.resumen_productos), 1)
+        self.assertEqual(analisis.resumen_productos[0]['margen_bruto_unitario'], Decimal('8'))
+
+    def test_filtros_proveedor_y_cliente_aplican_a_compras_y_ventas(self):
+        producto, proveedor, cliente = self._crear_movimientos_dashboard()
+
+        analisis = obtener_analisis_compras_ventas(
+            {
+                'producto': str(producto.id),
+                'proveedor': str(proveedor.id),
+                'cliente': str(cliente.id),
+            }
+        )
+
+        self.assertEqual(analisis.kpis['kg_comprados'], Decimal('20'))
+        self.assertEqual(analisis.kpis['kg_vendidos'], Decimal('10'))
+        self.assertEqual(analisis.kpis['margen_bruto_total'], Decimal('80'))
+
+    def _crear_movimientos_dashboard(self):
+        empresa = Entidad.objects.create(
+            tipo_documento_identidad=Entidad.RUC,
+            numero_documento='20999999999',
+            razon_social='Empresa Principal SAC',
+        )
+        proveedor = Entidad.objects.create(
+            tipo_documento_identidad=Entidad.RUC,
+            numero_documento='20111111111',
+            razon_social='Proveedor Dashboard SAC',
+            es_proveedor=True,
+        )
+        cliente = Entidad.objects.create(
+            tipo_documento_identidad=Entidad.RUC,
+            numero_documento='20444444444',
+            razon_social='Cliente Dashboard SAC',
+            es_cliente=True,
+        )
+        producto = Producto.objects.create(
+            codigo_interno='MP-DASH',
+            nombre='Cafe dashboard',
+            categoria='Cafe',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        compra = Documento.objects.create(
+            tipo_documento=Documento.FACTURA,
+            serie='F001',
+            numero='900',
+            fecha_emision=date(2026, 6, 1),
+            entidad_emisor=proveedor,
+            entidad_receptor=empresa,
+            proveedor=proveedor,
+            tipo_operacion=Documento.COMPRA,
+            moneda='PEN',
+            total=Decimal('236.00'),
+            xml_hash='dashboard-compra',
+            estado=Documento.CONFIRMADO,
+        )
+        DocumentoDetalle.objects.create(
+            documento=compra,
+            codigo_producto_xml='MP-DASH',
+            descripcion_xml='Cafe dashboard',
+            unidad_medida_xml='KG',
+            cantidad=Decimal('20'),
+            valor_unitario=Decimal('10'),
+            precio_unitario=Decimal('11.80'),
+            subtotal=Decimal('200'),
+            igv=Decimal('36'),
+            total=Decimal('236'),
+            producto=producto,
+            cantidad_base=Decimal('20'),
+            afecta_kardex=True,
+            estado_clasificacion=DocumentoDetalle.CLASIFICADO,
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 6, 1),
+            producto=producto,
+            documento_origen=compra,
+            entidad=proveedor,
+            tipo_movimiento=MovimientoKardex.ENTRADA,
+            cantidad_entrada=Decimal('20'),
+            costo_unitario_entrada=Decimal('10'),
+            costo_total_entrada=Decimal('200'),
+            stock_cantidad=Decimal('20'),
+            stock_costo_unitario_promedio=Decimal('10'),
+            stock_costo_total=Decimal('200'),
+        )
+        venta = Documento.objects.create(
+            tipo_documento=Documento.FACTURA,
+            serie='F002',
+            numero='901',
+            fecha_emision=date(2026, 6, 15),
+            entidad_emisor=empresa,
+            entidad_receptor=cliente,
+            cliente=cliente,
+            tipo_operacion=Documento.VENTA,
+            moneda='PEN',
+            total=Decimal('212.40'),
+            xml_hash='dashboard-venta',
+            estado=Documento.CONFIRMADO,
+        )
+        DocumentoDetalle.objects.create(
+            documento=venta,
+            codigo_producto_xml='MP-DASH',
+            descripcion_xml='Cafe dashboard',
+            unidad_medida_xml='KG',
+            cantidad=Decimal('10'),
+            valor_unitario=Decimal('18'),
+            precio_unitario=Decimal('21.24'),
+            subtotal=Decimal('180'),
+            igv=Decimal('32.40'),
+            total=Decimal('212.40'),
+            producto=producto,
+            cantidad_base=Decimal('10'),
+            afecta_kardex=True,
+            estado_clasificacion=DocumentoDetalle.CLASIFICADO,
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 6, 15),
+            producto=producto,
+            documento_origen=venta,
+            entidad=cliente,
+            tipo_movimiento=MovimientoKardex.SALIDA,
+            cantidad_salida=Decimal('10'),
+            costo_unitario_salida=Decimal('10'),
+            costo_total_salida=Decimal('100'),
+            stock_cantidad=Decimal('10'),
+            stock_costo_unitario_promedio=Decimal('10'),
+            stock_costo_total=Decimal('100'),
+        )
+        return producto, proveedor, cliente
 
     def test_formato_numero_usa_comas_y_dos_decimales(self):
         self.assertEqual(numero('1234567.891'), '1,234,567.89')
