@@ -1,0 +1,150 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="page-heading">
+    <div>
+        <h1>Proceso de trillado {{ proceso.id }}</h1>
+        <p>{{ proceso.fecha|fecha_corta }} · {{ proceso.producto_consumido }}</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-secondary" href="{% url 'kardex:procesos_trillado_lista' %}">Volver</a>
+        {% if not proceso.confirmado %}
+            <a class="btn btn-outline-primary" href="{% url 'kardex:proceso_trillado_editar' proceso.id %}">Editar borrador</a>
+            <form method="post" action="{% url 'kardex:confirmar_proceso_trillado' proceso.id %}">
+                {% csrf_token %}
+                <button class="btn btn-success" type="submit">Confirmar Kardex</button>
+            </form>
+        {% elif not proceso.anulado %}
+            <form method="post" action="{% url 'kardex:anular_proceso_trillado' proceso.id %}">
+                {% csrf_token %}
+                <button class="btn btn-outline-danger" type="submit">Anular proceso</button>
+            </form>
+        {% endif %}
+    </div>
+</div>
+
+{% if proceso.anulado %}
+    <div class="alert alert-danger">Proceso anulado. Los movimientos de reversion quedan registrados en Kardex.</div>
+{% endif %}
+
+<div class="row g-4 mb-4">
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Insumo</h2>
+                <div class="text-secondary">Cafe pergamino</div>
+                <div class="fw-semibold mt-1">{{ proceso.producto_consumido }}</div>
+                <div class="mt-3 text-secondary">Cantidad consumida</div>
+                <div class="h4 mb-0">{{ proceso.cantidad_consumida|numero }} KG</div>
+                <div class="mt-3 text-secondary">Merma fisica</div>
+                <div class="fw-semibold">{{ proceso.merma|numero }} KG</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Costo de proceso</h2>
+                <div class="d-flex justify-content-between mb-2"><span>USD</span><span class="numeric">{{ proceso.costo_proceso_usd|numero }}</span></div>
+                <div class="d-flex justify-content-between mb-2"><span>Tipo de cambio</span><span class="numeric">{{ proceso.tipo_cambio_fecha_proceso|numero }}</span></div>
+                <div class="d-flex justify-content-between"><span>Soles</span><span class="numeric">{{ proceso.costo_proceso_soles|numero }}</span></div>
+                {% if proceso.confirmado %}
+                    <div class="alert alert-info mt-3 mb-0">El tipo de cambio quedo congelado al confirmar.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-3">Resumen valorizado</h2>
+                <div class="d-flex justify-content-between mb-2"><span>Costo pergamino</span><span class="numeric">{{ proceso.costo_pergamino_consumido|numero }}</span></div>
+                <div class="d-flex justify-content-between mb-2"><span>Costo total proceso</span><span class="numeric">{{ proceso.costo_total_proceso|numero }}</span></div>
+                <div class="d-flex justify-content-between mb-2"><span>Costo exportable</span><span class="numeric">{{ proceso.costo_exportable|numero }}</span></div>
+                <div class="d-flex justify-content-between"><span>Costo unit. exportable</span><span class="numeric">{{ proceso.costo_unitario_exportable|numero }}</span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="data-card mb-4">
+    <div class="data-card-header">
+        <div>
+            <h2>Productos obtenidos</h2>
+            <p>El exportable toma el costo residual; los subproductos usan valor de mercado.</p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table app-table align-middle">
+            <thead>
+            <tr>
+                <th>Tipo</th>
+                <th>Producto</th>
+                <th class="text-end">Cantidad KG</th>
+                <th class="text-end">Valor mercado</th>
+                <th class="text-end">Costo asignado</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in proceso.productos_obtenidos.all %}
+                <tr>
+                    <td>{% if item.es_principal %}Exportable{% else %}Subproducto{% endif %}</td>
+                    <td>{{ item.producto }}</td>
+                    <td class="text-end">{{ item.cantidad_obtenida|numero }}</td>
+                    <td class="text-end">{{ item.valor_mercado_unitario|numero }}</td>
+                    <td class="text-end">{{ item.costo_asignado|numero }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% if proceso.movimientos_kardex.all %}
+<div class="data-card">
+    <div class="data-card-header">
+        <div>
+            <h2>Movimientos Kardex generados</h2>
+            <p>Movimientos historicos asociados a este proceso.</p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table app-table align-middle">
+            <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Producto</th>
+                <th>Movimiento</th>
+                <th class="text-end">Entrada</th>
+                <th class="text-end">Salida</th>
+                <th class="text-end">Costo entrada</th>
+                <th class="text-end">Costo salida</th>
+                <th class="text-end">Stock final</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for mov in proceso.movimientos_kardex.all %}
+                <tr>
+                    <td>{{ mov.fecha|fecha_corta }}</td>
+                    <td>{{ mov.producto }}</td>
+                    <td>{{ mov.get_tipo_movimiento_display }}</td>
+                    <td class="text-end">{{ mov.cantidad_entrada|numero }}</td>
+                    <td class="text-end">{{ mov.cantidad_salida|numero }}</td>
+                    <td class="text-end">{{ mov.costo_total_entrada|numero }}</td>
+                    <td class="text-end">{{ mov.costo_total_salida|numero }}</td>
+                    <td class="text-end">{{ mov.stock_cantidad|numero }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

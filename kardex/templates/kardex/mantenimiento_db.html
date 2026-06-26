@@ -1,0 +1,68 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+{% if messages %}
+    {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} mb-3">{{ message }}</div>
+    {% endfor %}
+{% endif %}
+
+<div class="page-heading">
+    <div>
+        <h1>Mantenimiento DB</h1>
+        <p>Respalda o reemplaza la base SQLite local de KARDEXML.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-5">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-2">Backup actual</h2>
+                <p class="text-secondary mb-4">Descarga una copia completa de la base de datos local.</p>
+                <form method="post" action="{% url 'kardex:backup_db' %}">
+                    {% csrf_token %}
+                    <button class="btn btn-primary" type="submit">Descargar backup</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-7">
+        <div class="card h-100">
+            <div class="card-body">
+                <h2 class="h5 mb-2">Restaurar backup</h2>
+                <p class="text-secondary mb-3">Reemplaza la base actual por el archivo seleccionado. Antes del reemplazo se guarda un backup automatico en <code>backups/db/</code>.</p>
+                <div class="alert alert-warning">
+                    Esta accion cambia todos los productos, documentos, usuarios, movimientos y configuraciones por los datos del backup.
+                </div>
+
+                <form method="post" action="{% url 'kardex:restaurar_db' %}" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    {% if form.non_field_errors %}
+                        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                    {% endif %}
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.archivo.id_for_label }}">{{ form.archivo.label }}</label>
+                        {{ form.archivo }}
+                        {% if form.archivo.help_text %}
+                            <div class="form-text">{{ form.archivo.help_text }}</div>
+                        {% endif %}
+                        {% for error in form.archivo.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="form-check mb-4">
+                        {{ form.confirmar }}
+                        <label class="form-check-label" for="{{ form.confirmar.id_for_label }}">{{ form.confirmar.label }}</label>
+                        {% for error in form.confirmar.errors %}
+                            <div class="text-danger small mt-1">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <button class="btn btn-danger" type="submit">Restaurar base</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

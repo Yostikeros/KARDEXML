@@ -2,6 +2,8 @@ from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.admin.views.decorators import staff_member_required
+from django.http import FileResponse
 from django.db.models import Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.dateparse import parse_date
@@ -14,10 +16,12 @@ from .forms import (
     ImportarXMLLoteForm,
     ProductoEquivalenciaForm,
     ProductoForm,
+    ProcesoTrilladoForm,
+    RestaurarBaseDatosForm,
     StockInicialForm,
     TipoCambioSunatImportForm,
 )
-from .models import Documento, DocumentoDetalle, Entidad, MovimientoKardex, Producto, ProductoEquivalencia, TipoCambioSunat
+from .models import Documento, DocumentoDetalle, Entidad, MovimientoKardex, ProcesoProductivo, Producto, ProductoEquivalencia, TipoCambioSunat
 from .services.clasificacion import (
     clasificar_detalle,
     clasificar_detalles_bloque,
@@ -26,6 +30,11 @@ from .services.clasificacion import (
     generar_pre_kardex,
 )
 from .services.dashboard import obtener_analisis_compras_ventas
+from .services.database_maintenance import (
+    DatabaseMaintenanceError,
+    crear_backup_base_datos,
+    restaurar_base_datos,
+)
 from .services.excel import generar_excel_response
 from .services.kardex import (
     KardexError,
@@ -36,6 +45,7 @@ from .services.kardex import (
     revertir_aprobacion_kardex,
     revertir_pre_kardex,
 )
+from .services.procesos import anular_proceso_trillado, actualizar_proceso_trillado, confirmar_proceso_trillado, crear_proceso_trillado
 from .services.reportes import (
     obtener_empresa_principal,
     obtener_documentos_importados,
@@ -443,6 +453,114 @@ def stock_inicial_view(request):
 
 
 @login_required(login_url="/admin/login/")
+def procesos_trillado_lista_view(request):
+    procesos = (
+        ProcesoProductivo.objects.select_related("producto_consumido")
+        .prefetch_related("productos_obtenidos__producto")
+        .filter(tipo_proceso=ProcesoProductivo.TRILLADO)
+        .order_by("-fecha", "-id")
+    )
+    return render(request, "kardex/procesos_trillado_lista.html", {"procesos": procesos})
+
+
+@login_required(login_url="/admin/login/")
+def proceso_trillado_crear_view(request):
+    form = ProcesoTrilladoForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        proceso = crear_proceso_trillado(form.cleaned_data, user=request.user)
+        messages.success(request, "Proceso de trillado registrado. Revisa los calculos y confirma para afectar Kardex.")
+        return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
+    return render(request, "kardex/proceso_trillado_form.html", {"form": form})
+
+
+@login_required(login_url="/admin/login/")
+def proceso_trillado_editar_view(request, proceso_id):
+    proceso = get_object_or_404(
+        ProcesoProductivo.objects.prefetch_related("productos_obtenidos__producto"),
+        pk=proceso_id,
+        tipo_proceso=ProcesoProductivo.TRILLADO,
+    )
+    if proceso.confirmado:
+        messages.error(request, "No se puede editar un proceso confirmado. Anula y registra un nuevo proceso.")
+        return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
+
+    form = ProcesoTrilladoForm(request.POST or None, initial=_initial_proceso_trillado(proceso))
+    if request.method == "POST" and form.is_valid():
+        fecha_cambio = form.cleaned_data["fecha"] != proceso.fecha
+        tipo_cambio_anterior = proceso.tipo_cambio_fecha_proceso
+        tipo_cambio_enviado = form.cleaned_data["tipo_cambio_fecha_proceso"]
+        if fecha_cambio and tipo_cambio_enviado == tipo_cambio_anterior:
+            form.add_error(
+                "tipo_cambio_fecha_proceso",
+                "La fecha cambio. Actualiza el tipo de cambio de la nueva fecha antes de guardar.",
+            )
+        else:
+            try:
+                actualizar_proceso_trillado(proceso, form.cleaned_data)
+                messages.success(request, "Proceso de trillado actualizado.")
+                return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
+            except KardexError as exc:
+                messages.error(request, str(exc))
+    return render(request, "kardex/proceso_trillado_form.html", {"form": form, "proceso": proceso})
+
+
+@login_required(login_url="/admin/login/")
+def proceso_trillado_detalle_view(request, proceso_id):
+    proceso = get_object_or_404(
+        ProcesoProductivo.objects.select_related("producto_consumido", "usuario_creacion")
+        .prefetch_related("productos_obtenidos__producto", "movimientos_kardex__producto"),
+        pk=proceso_id,
+        tipo_proceso=ProcesoProductivo.TRILLADO,
+    )
+    return render(request, "kardex/proceso_trillado_detalle.html", {"proceso": proceso})
+
+
+@login_required(login_url="/admin/login/")
+@require_POST
+def confirmar_proceso_trillado_view(request, proceso_id):
+    proceso = get_object_or_404(ProcesoProductivo, pk=proceso_id, tipo_proceso=ProcesoProductivo.TRILLADO)
+    try:
+        confirmar_proceso_trillado(proceso, user=request.user)
+        messages.success(request, "Proceso de trillado confirmado y Kardex actualizado.")
+    except KardexError as exc:
+        messages.error(request, str(exc))
+    return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
+
+
+@login_required(login_url="/admin/login/")
+@require_POST
+def anular_proceso_trillado_view(request, proceso_id):
+    proceso = get_object_or_404(ProcesoProductivo, pk=proceso_id, tipo_proceso=ProcesoProductivo.TRILLADO)
+    try:
+        anular_proceso_trillado(proceso, user=request.user)
+        messages.success(request, "Proceso de trillado anulado con movimientos de reversion.")
+    except KardexError as exc:
+        messages.error(request, str(exc))
+    return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
+
+
+def _initial_proceso_trillado(proceso):
+    initial = {
+        "fecha": proceso.fecha,
+        "producto_consumido": proceso.producto_consumido,
+        "cantidad_consumida": proceso.cantidad_consumida,
+        "costo_proceso_usd": proceso.costo_proceso_usd,
+        "tipo_cambio_fecha_proceso": proceso.tipo_cambio_fecha_proceso,
+        "merma": proceso.merma,
+        "observaciones": proceso.observaciones,
+    }
+    principal = proceso.productos_obtenidos.filter(es_principal=True).first()
+    if principal:
+        initial["producto_exportable"] = principal.producto
+        initial["cantidad_exportable"] = principal.cantidad_obtenida
+    for index, item in enumerate(proceso.productos_obtenidos.filter(es_principal=False).order_by("id")[:3], start=1):
+        initial[f"subproducto_{index}"] = item.producto
+        initial[f"cantidad_subproducto_{index}"] = item.cantidad_obtenida
+        initial[f"valor_mercado_subproducto_{index}"] = item.valor_mercado_unitario
+    return initial
+
+
+@login_required(login_url="/admin/login/")
 def tipo_cambio_sunat_view(request):
     form = TipoCambioSunatImportForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -454,6 +572,50 @@ def tipo_cambio_sunat_view(request):
             messages.error(request, f"No se pudo importar el tipo de cambio SUNAT: {exc}")
     tipos_cambio = TipoCambioSunat.objects.order_by("-anio", "-id")[:90]
     return render(request, "kardex/tipo_cambio_sunat.html", {"form": form, "tipos_cambio": tipos_cambio})
+
+
+@staff_member_required(login_url="/admin/login/")
+def mantenimiento_db_view(request):
+    form = RestaurarBaseDatosForm()
+    return render(request, "kardex/mantenimiento_db.html", {"form": form})
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def backup_db_view(request):
+    try:
+        backup_path = crear_backup_base_datos()
+    except DatabaseMaintenanceError as exc:
+        messages.error(request, str(exc))
+        return redirect("kardex:mantenimiento_db")
+
+    return FileResponse(
+        backup_path.open("rb"),
+        as_attachment=True,
+        filename=backup_path.name,
+        content_type="application/vnd.sqlite3",
+    )
+
+
+@staff_member_required(login_url="/admin/login/")
+@require_POST
+def restaurar_db_view(request):
+    form = RestaurarBaseDatosForm(request.POST, request.FILES)
+    if not form.is_valid():
+        messages.error(request, "Selecciona una base valida y confirma la restauracion.")
+        return render(request, "kardex/mantenimiento_db.html", {"form": form})
+
+    try:
+        backup_path = restaurar_base_datos(form.cleaned_data["archivo"])
+    except DatabaseMaintenanceError as exc:
+        messages.error(request, str(exc))
+        return render(request, "kardex/mantenimiento_db.html", {"form": form})
+
+    messages.success(
+        request,
+        f"Base de datos restaurada correctamente. Backup previo guardado en {backup_path}.",
+    )
+    return redirect("kardex:mantenimiento_db")
 
 
 @login_required(login_url="/admin/login/")

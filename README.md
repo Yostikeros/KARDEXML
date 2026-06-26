@@ -6,11 +6,11 @@ Este proyecto fue recuperado despues de corrupcion en un disco extraible. Las vi
 
 ## Como levantar la app
 
-Desde `F:\DEVELOPER\DEV_APP\KARDEXML`:
+Desde la raiz del proyecto:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+python -m venv .ven
+.\.ven\Scripts\Activate.ps1
 pip install -r requirements.txt
 ```
 
@@ -65,12 +65,14 @@ python manage.py check
 python manage.py test
 ```
 
-Estado al ultimo avance: `54 tests OK`.
+Estado al ultimo avance: `65 tests OK`.
 
 ## Base de datos y migraciones
 
 - La base local fue recreada despues de la corrupcion del disco.
 - En `kardexml/settings.py` sigue `MIGRATION_MODULES = {"kardex": None}` porque `kardex/migrations/0001_initial.py` quedo comprometido.
+- La base local usa SQLite en `db.sqlite3`.
+- Los cambios de esquema de `kardex` se sincronizan en bases nuevas con `migrate --run-syncdb`. En bases SQLite ya existentes, antes de agregar columnas nuevas se debe crear backup y aplicar la actualizacion de esquema correspondiente.
 - Para crear tablas desde los modelos en una base nueva:
 
 ```powershell
@@ -84,6 +86,40 @@ $env:PYTHONPATH='F:\DEVELOPER\DEV_APP\KARDEXML\.venv\Lib\site-packages'
 py -3.12 manage.py migrate --run-syncdb
 ```
 
+## Mantenimiento de base de datos
+
+La app incluye una pantalla de mantenimiento para usuarios administradores/staff.
+
+Ruta:
+
+```text
+/mantenimiento/db/
+```
+
+Tambien aparece en el menu lateral como `Sistema > Mantenimiento DB` cuando el usuario es administrador.
+
+Permite:
+
+- Descargar un backup completo de la base SQLite actual.
+- Restaurar una base SQLite subida desde archivo `.sqlite3`, `.sqlite` o `.db`.
+- Validar que el archivo subido sea SQLite y tenga estructura minima de Django.
+- Crear automaticamente un backup previo antes de reemplazar la base actual.
+
+Los backups previos generados por restauracion se guardan en:
+
+```text
+backups/db/
+```
+
+Rutas internas:
+
+```text
+/mantenimiento/db/backup/
+/mantenimiento/db/restaurar/
+```
+
+Importante: restaurar una base reemplaza productos, entidades, documentos, movimientos, usuarios y configuraciones por el contenido del archivo subido.
+
 ## Configuracion actual importante
 
 - Empresa principal activa: RUC `20570726014`.
@@ -91,6 +127,8 @@ py -3.12 manage.py migrate --run-syncdb
 - El admin de Django registra los modelos de la app `kardex`.
 - El boton del usuario en el sidebar lleva al admin cuando el usuario es administrador.
 - La pagina de stock inicial filtra saldos iniciales reales, sin mezclar movimientos de documentos.
+- La pantalla `Trillado` registra procesos internos de pergamino a exportable/subproductos con costo de proceso USD, tipo de cambio congelado y anulacion por reversión.
+- El menu `Sistema > Mantenimiento DB` permite backup y restauracion de la base SQLite para usuarios administradores.
 - Los mensajes de error usan clases Bootstrap correctas mediante `MESSAGE_TAGS`.
 - `SECRET_KEY`, `DEBUG` y `ALLOWED_HOSTS` se leen desde variables de entorno (`DJANGO_SECRET_KEY`, `DJANGO_DEBUG`, `DJANGO_ALLOWED_HOSTS`).
 
@@ -103,6 +141,7 @@ py -3.12 manage.py migrate --run-syncdb
 5. Revisar documentos en `Pre-Kardex`.
 6. Aprobar Pre-Kardex para generar movimientos de inventario.
 7. Revisar reportes de stock, Kardex por producto, documentos importados y movimientos por documento.
+8. Respaldar la base desde `Sistema > Mantenimiento DB` cuando se termine una carga o ajuste importante.
 
 ## Importacion XML
 
@@ -244,6 +283,69 @@ Rutas:
 /stock-inicial/<movimiento_id>/editar/
 ```
 
+## Proceso de trillado de cafe
+
+La pantalla `Trillado` permite registrar la transformacion interna de cafe pergamino a cafe exportable y subproductos.
+
+Ruta:
+
+```text
+/procesos/trillado/
+```
+
+Rutas:
+
+```text
+/procesos/trillado/
+/procesos/trillado/nuevo/
+/procesos/trillado/<id>/
+/procesos/trillado/<id>/editar/
+/procesos/trillado/<id>/confirmar/
+/procesos/trillado/<id>/anular/
+```
+
+Flujo:
+
+1. Registrar un borrador de proceso con fecha, cafe pergamino consumido, cantidad, merma, costo de proceso USD y tipo de cambio de la fecha.
+2. Registrar el cafe exportable obtenido y hasta tres subproductos con cantidad y valor de mercado unitario.
+3. Revisar el borrador.
+4. Confirmar Kardex para generar movimientos historicos.
+5. Si se necesita corregir un proceso confirmado, anularlo y registrar un nuevo proceso.
+
+Mientras el proceso esta en borrador se puede editar. Si se cambia la fecha antes de confirmar, se debe actualizar el tipo de cambio de la nueva fecha o dejar que el sistema tome el tipo de cambio SUNAT venta registrado para esa fecha.
+
+Reglas de valorizacion:
+
+- `costo_pergamino_consumido = cantidad_pergamino_kg * costo_promedio_pergamino`.
+- `costo_proceso_soles = costo_proceso_usd * tipo_cambio_fecha_proceso`.
+- `costo_total_proceso = costo_pergamino_consumido + costo_proceso_soles`.
+- `costo_total_subproductos = suma(cantidad_subproducto * valor_mercado_unitario)`.
+- `costo_exportable = costo_total_proceso - costo_total_subproductos`.
+- `costo_unitario_exportable = costo_exportable / cantidad_exportable`.
+
+El tipo de cambio se guarda en el proceso como `tipo_cambio_fecha_proceso`. Si el campo se deja vacio, la app intenta tomar el tipo de cambio SUNAT venta registrado para la fecha del proceso. Una vez confirmado, el tipo de cambio queda congelado y no cambia aunque se actualice la tabla de tipo de cambio.
+
+Validaciones principales:
+
+- Fecha obligatoria.
+- Tipo de cambio mayor que cero.
+- Costo de proceso USD mayor o igual que cero.
+- Stock suficiente de cafe pergamino a la fecha del proceso.
+- `cantidad_pergamino = cantidad_exportable + cantidad_subproductos + merma`.
+- El costo total de subproductos no puede superar el costo total del proceso.
+- El costo exportable no puede ser negativo.
+- La cantidad exportable debe ser mayor que cero.
+- No se permite confirmar con fecha anterior a movimientos posteriores de los productos involucrados, para proteger el Kardex historico.
+
+Al confirmar:
+
+- Se genera `PROCESO_SALIDA` para el cafe pergamino.
+- Se genera `PROCESO_ENTRADA` para el cafe exportable con costo residual.
+- Se genera `PROCESO_ENTRADA` para cada subproducto con valor de mercado.
+- Se registran costo de proceso USD, tipo de cambio usado, costo equivalente en soles y merma fisica no valorizada.
+
+Los procesos confirmados no se editan directamente; cualquier correccion debe hacerse mediante anulacion/nuevo proceso. La anulacion registra movimientos `REVERSION` y solo se permite si los movimientos del proceso siguen siendo los ultimos de los productos involucrados.
+
 ## Reportes
 
 Pantallas disponibles:
@@ -312,7 +414,9 @@ La exportacion se activa con el parametro `export=excel` en la URL del reporte.
 - Pre-Kardex por aprobar.
 - Reversion de Pre-Kardex.
 - Reversion de aprobacion.
+- Proceso de trillado de cafe con costo de proceso USD, tipo de cambio congelado y subproductos a valor de mercado.
 - Tipo de cambio SUNAT.
+- Mantenimiento DB para backup y restauracion de SQLite.
 - Reportes.
 - Kardex valorizado SUNAT por producto.
 - Exportacion Excel de reportes.
@@ -334,9 +438,11 @@ La suite actual cubre, entre otros:
 - Reversion de Pre-Kardex sin borrar XML.
 - Reversion de aprobacion con bloqueo por movimientos posteriores.
 - Stock inicial y edicion controlada.
+- Proceso de trillado: tipo de cambio SUNAT, costo de proceso en soles, costo residual exportable, subproductos a valor de mercado y anulacion con reversiones.
 - Reportes principales.
 - Kardex valorizado SUNAT por producto.
 - Exportacion Excel `.xlsx` o `.xls` compatible segun dependencias disponibles.
+- Mantenimiento DB: acceso staff, descarga de backup y rechazo de archivos no SQLite.
 - Formatos de numero y fecha.
 
 ## Recomendaciones para no volver a perder avances
@@ -346,6 +452,7 @@ La suite actual cubre, entre otros:
 - Usar Git y hacer commits pequenos despues de cada correccion importante.
 - Subir el repositorio a GitHub como respaldo remoto.
 - Mantener copias de `db.sqlite3` si se necesita conservar datos cargados localmente.
+- Usar `Sistema > Mantenimiento DB` para descargar backups antes de restaurar o hacer cambios grandes de datos.
 - Separar respaldos de codigo y respaldos de base de datos.
 
 ## Preparacion para GitHub
@@ -374,7 +481,7 @@ Antes de ejecutar `git add .`, confirma que no se incluiran archivos locales sen
 git status --short
 ```
 
-No deberian aparecer `db.sqlite3`, `.venv/`, `.env`, `*.log` ni `__pycache__/`.
+No deberian aparecer `db.sqlite3`, `.ven/`, `.venv/`, `.env`, `*.log` ni `__pycache__/`.
 
 ## Pendientes tecnicos
 

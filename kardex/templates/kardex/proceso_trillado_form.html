@@ -1,0 +1,108 @@
+{% extends "kardex/base.html" %}
+
+{% block content %}
+<div class="page-heading">
+    <div>
+        <h1>{% if proceso %}Editar proceso de trillado{% else %}Nuevo proceso de trillado{% endif %}</h1>
+        <p>Registra la transformacion fisica y el costo de proceso en dolares.</p>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'kardex:procesos_trillado_lista' %}">Volver</a>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Pergamino y costo de proceso</h2>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.fecha.id_for_label }}">{{ form.fecha.label }}</label>
+                        {{ form.fecha }}
+                        {% for error in form.fecha.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.producto_consumido.id_for_label }}">{{ form.producto_consumido.label }}</label>
+                        {{ form.producto_consumido }}
+                        {% for error in form.producto_consumido.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.cantidad_consumida.id_for_label }}">{{ form.cantidad_consumida.label }}</label>
+                            {{ form.cantidad_consumida }}
+                            {% for error in form.cantidad_consumida.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.merma.id_for_label }}">{{ form.merma.label }}</label>
+                            {{ form.merma }}
+                            {% for error in form.merma.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.costo_proceso_usd.id_for_label }}">{{ form.costo_proceso_usd.label }}</label>
+                            {{ form.costo_proceso_usd }}
+                            {% for error in form.costo_proceso_usd.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.tipo_cambio_fecha_proceso.id_for_label }}">{{ form.tipo_cambio_fecha_proceso.label }}</label>
+                            {{ form.tipo_cambio_fecha_proceso }}
+                            {% if form.tipo_cambio_fecha_proceso.help_text %}<div class="form-text">{{ form.tipo_cambio_fecha_proceso.help_text }}</div>{% endif %}
+                            {% for error in form.tipo_cambio_fecha_proceso.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="{{ form.observaciones.id_for_label }}">{{ form.observaciones.label }}</label>
+                        {{ form.observaciones }}
+                        {% for error in form.observaciones.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Productos obtenidos</h2>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.producto_exportable.id_for_label }}">{{ form.producto_exportable.label }}</label>
+                        {{ form.producto_exportable }}
+                        {% for error in form.producto_exportable.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label" for="{{ form.cantidad_exportable.id_for_label }}">{{ form.cantidad_exportable.label }}</label>
+                        {{ form.cantidad_exportable }}
+                        {% for error in form.cantidad_exportable.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+                    </div>
+
+                    <h3 class="h6 mb-3">Subproductos</h3>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-5"><label class="form-label" for="{{ form.subproducto_1.id_for_label }}">Subproducto 1</label>{{ form.subproducto_1 }}{% for error in form.subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                        <div class="col-md-3"><label class="form-label" for="{{ form.cantidad_subproducto_1.id_for_label }}">Cantidad</label>{{ form.cantidad_subproducto_1 }}{% for error in form.cantidad_subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                        <div class="col-md-4"><label class="form-label" for="{{ form.valor_mercado_subproducto_1.id_for_label }}">Valor mercado</label>{{ form.valor_mercado_subproducto_1 }}{% for error in form.valor_mercado_subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-5"><label class="form-label" for="{{ form.subproducto_2.id_for_label }}">Subproducto 2</label>{{ form.subproducto_2 }}{% for error in form.subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                        <div class="col-md-3"><label class="form-label" for="{{ form.cantidad_subproducto_2.id_for_label }}">Cantidad</label>{{ form.cantidad_subproducto_2 }}{% for error in form.cantidad_subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                        <div class="col-md-4"><label class="form-label" for="{{ form.valor_mercado_subproducto_2.id_for_label }}">Valor mercado</label>{{ form.valor_mercado_subproducto_2 }}{% for error in form.valor_mercado_subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-5"><label class="form-label" for="{{ form.subproducto_3.id_for_label }}">Subproducto 3</label>{{ form.subproducto_3 }}{% for error in form.subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                        <div class="col-md-3"><label class="form-label" for="{{ form.cantidad_subproducto_3.id_for_label }}">Cantidad</label>{{ form.cantidad_subproducto_3 }}{% for error in form.cantidad_subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                        <div class="col-md-4"><label class="form-label" for="{{ form.valor_mercado_subproducto_3.id_for_label }}">Valor mercado</label>{{ form.valor_mercado_subproducto_3 }}{% for error in form.valor_mercado_subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mt-4">
+        <a class="btn btn-outline-secondary" href="{% url 'kardex:procesos_trillado_lista' %}">Cancelar</a>
+        <button class="btn btn-primary" type="submit">{% if proceso %}Guardar cambios{% else %}Guardar borrador{% endif %}</button>
+    </div>
+</form>
+{% endblock %}

@@ -1,19 +1,24 @@
 from django.contrib.auth.models import User
+from django.conf import settings
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
 from django.urls import reverse
 from datetime import date
 from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
+from unittest.mock import patch
 
 from openpyxl import load_workbook
 
-from .forms import ClasificarBloqueForm, ClasificarDetalleForm, StockInicialForm
+from .forms import ClasificarBloqueForm, ClasificarDetalleForm, ProcesoTrilladoForm, StockInicialForm
 from .models import (
     Documento,
     DocumentoDetalle,
     EmpresaPrincipal,
     Entidad,
     MovimientoKardex,
+    ProcesoProductivo,
     Producto,
     ProductoEquivalencia,
     TipoCambioSunat,
@@ -28,6 +33,7 @@ from .services.kardex import (
     revertir_aprobacion_kardex,
     revertir_pre_kardex,
 )
+from .services.procesos import anular_proceso_trillado, confirmar_proceso_trillado, crear_proceso_trillado
 from .services.reportes import obtener_stock_actual
 from .templatetags.kardex_format import fecha_corta, numero
 from .services.xml_importer import XMLImportError, importar_xml
@@ -1324,3 +1330,211 @@ class XMLImporterTests(TestCase):
         self.assertIn('factor_conversion', detalle_form.errors)
         self.assertFalse(bloque_form.is_valid())
         self.assertIn('factor_conversion', bloque_form.errors)
+
+
+class DatabaseMaintenanceTests(TestCase):
+    def setUp(self):
+        self.staff = User.objects.create_user(
+            username='staff',
+            password='admin12345',
+            is_staff=True,
+            is_superuser=True,
+        )
+        self.user = User.objects.create_user(username='operador', password='admin12345')
+
+    def test_staff_ve_mantenimiento_db_en_menu(self):
+        self.client.force_login(self.staff)
+
+        response = self.client.get(reverse('kardex:mantenimiento_db'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Mantenimiento DB')
+        self.assertContains(response, reverse('kardex:backup_db'))
+        self.assertContains(response, reverse('kardex:restaurar_db'))
+
+    def test_usuario_no_staff_no_accede_a_mantenimiento_db(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('kardex:mantenimiento_db'))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn('/admin/login/', response['Location'])
+
+    def test_staff_descarga_backup_sqlite(self):
+        self.client.force_login(self.staff)
+        backup_path = Path(settings.BASE_DIR) / 'backups' / 'db' / 'test-backup.sqlite3'
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        backup_path.write_bytes(b'SQLite backup de prueba')
+
+        with patch('kardex.views.crear_backup_base_datos', return_value=backup_path):
+            response = self.client.post(reverse('kardex:backup_db'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response['Content-Type'], 'application/vnd.sqlite3')
+        self.assertIn('attachment;', response['Content-Disposition'])
+        response.close()
+        backup_path.unlink(missing_ok=True)
+
+    def test_restaurar_rechaza_archivo_no_sqlite(self):
+        self.client.force_login(self.staff)
+        archivo = SimpleUploadedFile(
+            'backup.txt',
+            b'no es sqlite',
+            content_type='text/plain',
+        )
+
+        response = self.client.post(
+            reverse('kardex:restaurar_db'),
+            {'archivo': archivo, 'confirmar': 'on'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'El archivo subido no es una base SQLite valida.')
+
+
+class ProcesoTrilladoTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username='admin', password='admin12345')
+        self.pergamino = Producto.objects.create(
+            codigo_interno='MP-PERG',
+            nombre='Cafe pergamino',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        self.exportable = Producto.objects.create(
+            codigo_interno='PT-EXP',
+            nombre='Cafe exportable',
+            tipo_producto=Producto.PRODUCTO_TERMINADO,
+        )
+        self.subproducto = Producto.objects.create(
+            codigo_interno='SP-CASC',
+            nombre='Cafe subproducto',
+            tipo_producto=Producto.SUBPRODUCTO,
+        )
+        registrar_stock_inicial(
+            producto=self.pergamino,
+            fecha=date(2026, 6, 1),
+            cantidad=Decimal('1000'),
+            costo_unitario=Decimal('10'),
+            user=self.user,
+        )
+        TipoCambioSunat.objects.create(
+            mes='junio',
+            anio=2026,
+            dia=26,
+            compra=Decimal('3.600000'),
+            venta=Decimal('3.700000'),
+        )
+
+    def test_formulario_trillado_toma_tipo_cambio_sunat_si_no_se_ingresa(self):
+        form = ProcesoTrilladoForm(
+            data={
+                'fecha': '2026-06-26',
+                'producto_consumido': self.pergamino.id,
+                'cantidad_consumida': '1000',
+                'costo_proceso_usd': '100',
+                'producto_exportable': self.exportable.id,
+                'cantidad_exportable': '760',
+                'merma': '60',
+                'subproducto_1': self.subproducto.id,
+                'cantidad_subproducto_1': '180',
+                'valor_mercado_subproducto_1': '1.5',
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['tipo_cambio_fecha_proceso'], Decimal('3.700000'))
+
+    def test_confirmar_trillado_genera_movimientos_y_congela_costos(self):
+        data = {
+            'fecha': date(2026, 6, 26),
+            'producto_consumido': self.pergamino,
+            'cantidad_consumida': Decimal('1000'),
+            'costo_proceso_usd': Decimal('100'),
+            'tipo_cambio_fecha_proceso': Decimal('3.700000'),
+            'producto_exportable': self.exportable,
+            'cantidad_exportable': Decimal('760'),
+            'merma': Decimal('60'),
+            'subproducto_1': self.subproducto,
+            'cantidad_subproducto_1': Decimal('180'),
+            'valor_mercado_subproducto_1': Decimal('1.5'),
+        }
+        proceso = crear_proceso_trillado(data, user=self.user)
+
+        confirmar_proceso_trillado(proceso, user=self.user)
+
+        proceso.refresh_from_db()
+        self.assertTrue(proceso.confirmado)
+        self.assertEqual(proceso.costo_pergamino_consumido, Decimal('10000.00'))
+        self.assertEqual(proceso.costo_proceso_soles, Decimal('370.00'))
+        self.assertEqual(proceso.costo_total_proceso, Decimal('10370.00'))
+        self.assertEqual(proceso.costo_exportable, Decimal('10100.00'))
+        self.assertEqual(proceso.costo_unitario_exportable, Decimal('13.289474'))
+        self.assertEqual(proceso.tipo_cambio_fecha_proceso, Decimal('3.700000'))
+
+        movimientos = list(MovimientoKardex.objects.filter(proceso_origen=proceso).order_by('id'))
+        self.assertEqual(len(movimientos), 3)
+        self.assertEqual(movimientos[0].tipo_movimiento, MovimientoKardex.PROCESO_SALIDA)
+        self.assertEqual(movimientos[0].producto, self.pergamino)
+        self.assertEqual(movimientos[0].costo_total_salida, Decimal('10000.00'))
+        self.assertEqual(movimientos[1].tipo_movimiento, MovimientoKardex.PROCESO_ENTRADA)
+        self.assertEqual(movimientos[1].producto, self.exportable)
+        self.assertEqual(movimientos[1].costo_total_entrada, Decimal('10100.00'))
+        self.assertEqual(movimientos[2].producto, self.subproducto)
+        self.assertEqual(movimientos[2].costo_total_entrada, Decimal('270.00'))
+
+        TipoCambioSunat.objects.filter(anio=2026, mes='junio', dia=26).update(venta=Decimal('4.000000'))
+        proceso.refresh_from_db()
+        self.assertEqual(proceso.tipo_cambio_fecha_proceso, Decimal('3.700000'))
+
+    def test_confirmar_trillado_bloquea_subproductos_mayores_al_costo_total(self):
+        proceso = crear_proceso_trillado(
+            {
+                'fecha': date(2026, 6, 26),
+                'producto_consumido': self.pergamino,
+                'cantidad_consumida': Decimal('1000'),
+                'costo_proceso_usd': Decimal('0'),
+                'tipo_cambio_fecha_proceso': Decimal('3.700000'),
+                'producto_exportable': self.exportable,
+                'cantidad_exportable': Decimal('760'),
+                'merma': Decimal('60'),
+                'subproducto_1': self.subproducto,
+                'cantidad_subproducto_1': Decimal('180'),
+                'valor_mercado_subproducto_1': Decimal('100'),
+            },
+            user=self.user,
+        )
+
+        with self.assertRaises(KardexError):
+            confirmar_proceso_trillado(proceso, user=self.user)
+
+    def test_anular_trillado_genera_reversiones_sin_borrar_originales(self):
+        proceso = crear_proceso_trillado(
+            {
+                'fecha': date(2026, 6, 26),
+                'producto_consumido': self.pergamino,
+                'cantidad_consumida': Decimal('1000'),
+                'costo_proceso_usd': Decimal('100'),
+                'tipo_cambio_fecha_proceso': Decimal('3.700000'),
+                'producto_exportable': self.exportable,
+                'cantidad_exportable': Decimal('760'),
+                'merma': Decimal('60'),
+                'subproducto_1': self.subproducto,
+                'cantidad_subproducto_1': Decimal('180'),
+                'valor_mercado_subproducto_1': Decimal('1.5'),
+            },
+            user=self.user,
+        )
+        confirmar_proceso_trillado(proceso, user=self.user)
+
+        anular_proceso_trillado(proceso, user=self.user)
+
+        proceso.refresh_from_db()
+        self.assertTrue(proceso.anulado)
+        self.assertEqual(MovimientoKardex.objects.filter(proceso_origen=proceso).count(), 6)
+        self.assertEqual(
+            MovimientoKardex.objects.filter(
+                proceso_origen=proceso,
+                tipo_movimiento=MovimientoKardex.REVERSION,
+            ).count(),
+            3,
+        )

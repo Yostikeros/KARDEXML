@@ -92,20 +92,20 @@ class MovimientoKardexAdmin(admin.ModelAdmin):
     search_fields = ("producto__nombre", "documento_origen__serie", "documento_origen__numero", "entidad__razon_social")
     list_filter = ("tipo_movimiento", "fecha")
     date_hierarchy = "fecha"
-    autocomplete_fields = ("producto", "documento_origen", "entidad", "usuario_creacion")
+    autocomplete_fields = ("producto", "documento_origen", "proceso_origen", "entidad", "usuario_creacion")
 
 
 @admin.register(ProcesoProductivo)
 class ProcesoProductivoAdmin(admin.ModelAdmin):
-    list_display = ("fecha", "producto_consumido", "cantidad_consumida", "merma", "confirmado")
+    list_display = ("fecha", "tipo_proceso", "producto_consumido", "cantidad_consumida", "costo_proceso_usd", "tipo_cambio_fecha_proceso", "costo_total_proceso", "confirmado", "anulado")
     search_fields = ("producto_consumido__nombre", "observaciones")
-    list_filter = ("confirmado", "fecha")
+    list_filter = ("tipo_proceso", "confirmado", "anulado", "fecha")
     autocomplete_fields = ("producto_consumido", "usuario_creacion")
 
 
 @admin.register(ProcesoProductoObtenido)
 class ProcesoProductoObtenidoAdmin(admin.ModelAdmin):
-    list_display = ("proceso", "producto", "cantidad_obtenida", "costo_asignado")
+    list_display = ("proceso", "producto", "es_principal", "cantidad_obtenida", "valor_mercado_unitario", "costo_asignado")
     autocomplete_fields = ("proceso", "producto")
 
 

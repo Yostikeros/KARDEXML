@@ -491,6 +491,13 @@ class MovimientoKardex(models.Model):
         on_delete=models.PROTECT,
         related_name='movimientos_kardex',
     )
+    proceso_origen = models.ForeignKey(
+        'ProcesoProductivo',
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='movimientos_kardex',
+    )
     entidad = models.ForeignKey(
         Entidad,
         null=True,
@@ -526,6 +533,7 @@ class MovimientoKardex(models.Model):
             models.Index(fields=['producto', 'fecha']),
             models.Index(fields=['tipo_movimiento']),
             models.Index(fields=['documento_origen']),
+            models.Index(fields=['proceso_origen']),
         ]
 
     def __str__(self):
@@ -533,6 +541,13 @@ class MovimientoKardex(models.Model):
 
 
 class ProcesoProductivo(TimeStampedModel):
+    TRILLADO = 'trillado'
+
+    TIPO_PROCESO_CHOICES = [
+        (TRILLADO, 'Cafe trillado'),
+    ]
+
+    tipo_proceso = models.CharField(max_length=30, choices=TIPO_PROCESO_CHOICES, default=TRILLADO)
     fecha = models.DateField()
     producto_consumido = models.ForeignKey(
         Producto,
@@ -541,8 +556,18 @@ class ProcesoProductivo(TimeStampedModel):
     )
     cantidad_consumida = models.DecimalField(max_digits=18, decimal_places=6)
     merma = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
+    costo_proceso_usd = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
+    tipo_cambio_fecha_proceso = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal('0'))
+    costo_proceso_soles = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    costo_pergamino_consumido = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    costo_total_proceso = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    costo_exportable = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    costo_unitario_exportable = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
     observaciones = models.TextField(blank=True)
     confirmado = models.BooleanField(default=False)
+    anulado = models.BooleanField(default=False)
+    fecha_confirmacion = models.DateTimeField(null=True, blank=True)
+    fecha_anulacion = models.DateTimeField(null=True, blank=True)
     usuario_creacion = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -574,7 +599,9 @@ class ProcesoProductoObtenido(models.Model):
         on_delete=models.PROTECT,
         related_name='procesos_como_resultado',
     )
+    es_principal = models.BooleanField(default=False)
     cantidad_obtenida = models.DecimalField(max_digits=18, decimal_places=6)
+    valor_mercado_unitario = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
     costo_asignado = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
 
     class Meta:

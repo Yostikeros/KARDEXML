@@ -2,7 +2,23 @@ from decimal import Decimal
 
 from django import forms
 
-from .models import Entidad, Producto, ProductoEquivalencia
+from .models import Entidad, Producto, ProductoEquivalencia, TipoCambioSunat
+
+
+MESES_POR_NUMERO = {
+    1: 'enero',
+    2: 'febrero',
+    3: 'marzo',
+    4: 'abril',
+    5: 'mayo',
+    6: 'junio',
+    7: 'julio',
+    8: 'agosto',
+    9: 'septiembre',
+    10: 'octubre',
+    11: 'noviembre',
+    12: 'diciembre',
+}
 
 
 class ProductoForm(forms.ModelForm):
@@ -181,6 +197,23 @@ class ImportarXMLLoteForm(forms.Form):
     )
 
 
+class RestaurarBaseDatosForm(forms.Form):
+    archivo = forms.FileField(
+        label='Archivo de base de datos',
+        widget=forms.ClearableFileInput(
+            attrs={
+                'class': 'form-control',
+                'accept': '.sqlite,.sqlite3,.db,application/vnd.sqlite3,application/octet-stream',
+            }
+        ),
+        help_text='Selecciona un backup SQLite generado por esta aplicacion.',
+    )
+    confirmar = forms.BooleanField(
+        label='Confirmo que deseo reemplazar la base de datos actual',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+    )
+
+
 class ClasificarDetalleForm(forms.Form):
     producto = forms.ModelChoiceField(
         queryset=Producto.objects.filter(activo=True).order_by('nombre'),
@@ -330,3 +363,159 @@ class StockInicialForm(forms.Form):
         super().__init__(*args, **kwargs)
         if bloquear_producto:
             self.fields['producto'].disabled = True
+
+
+class ProcesoTrilladoForm(forms.Form):
+    fecha = forms.DateField(
+        label='Fecha del proceso',
+        input_formats=['%Y-%m-%d', '%d/%m/%Y'],
+        widget=forms.DateInput(
+            format='%Y-%m-%d',
+            attrs={'class': 'form-control', 'type': 'date'},
+        ),
+    )
+    producto_consumido = forms.ModelChoiceField(
+        queryset=Producto.objects.filter(activo=True, controla_stock=True, afecta_kardex=True).order_by('nombre'),
+        label='Cafe pergamino consumido',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    cantidad_consumida = forms.DecimalField(
+        label='Cantidad pergamino KG',
+        max_digits=18,
+        decimal_places=6,
+        min_value=Decimal('0.000001'),
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+    )
+    costo_proceso_usd = forms.DecimalField(
+        label='Costo de proceso USD',
+        max_digits=18,
+        decimal_places=6,
+        min_value=Decimal('0'),
+        initial=Decimal('0'),
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+    )
+    tipo_cambio_fecha_proceso = forms.DecimalField(
+        label='Tipo de cambio fecha proceso',
+        max_digits=12,
+        decimal_places=6,
+        min_value=Decimal('0.000001'),
+        required=False,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+        help_text='Si lo dejas vacio, se intentara usar el tipo de cambio SUNAT venta registrado para la fecha.',
+    )
+    producto_exportable = forms.ModelChoiceField(
+        queryset=Producto.objects.filter(activo=True, controla_stock=True, afecta_kardex=True).order_by('nombre'),
+        label='Cafe exportable obtenido',
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    cantidad_exportable = forms.DecimalField(
+        label='Cantidad exportable KG',
+        max_digits=18,
+        decimal_places=6,
+        min_value=Decimal('0.000001'),
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+    )
+    merma = forms.DecimalField(
+        label='Merma KG',
+        max_digits=18,
+        decimal_places=6,
+        min_value=Decimal('0'),
+        initial=Decimal('0'),
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+    )
+    observaciones = forms.CharField(
+        label='Observaciones',
+        required=False,
+        widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        subproductos = Producto.objects.filter(
+            activo=True,
+            controla_stock=True,
+            afecta_kardex=True,
+        ).order_by('nombre')
+        for index in range(1, 4):
+            self.fields[f'subproducto_{index}'] = forms.ModelChoiceField(
+                queryset=subproductos,
+                label=f'Subproducto {index}',
+                required=False,
+                widget=forms.Select(attrs={'class': 'form-select'}),
+            )
+            self.fields[f'cantidad_subproducto_{index}'] = forms.DecimalField(
+                label='Cantidad KG',
+                max_digits=18,
+                decimal_places=6,
+                min_value=Decimal('0.000001'),
+                required=False,
+                widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+            )
+            self.fields[f'valor_mercado_subproducto_{index}'] = forms.DecimalField(
+                label='Valor mercado unitario',
+                max_digits=18,
+                decimal_places=6,
+                min_value=Decimal('0'),
+                required=False,
+                widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+            )
+
+    def clean(self):
+        cleaned_data = super().clean()
+        fecha = cleaned_data.get('fecha')
+        tipo_cambio = cleaned_data.get('tipo_cambio_fecha_proceso')
+        if fecha and not tipo_cambio:
+            tipo_cambio = _tipo_cambio_sunat_venta(fecha)
+            if tipo_cambio:
+                cleaned_data['tipo_cambio_fecha_proceso'] = tipo_cambio
+        if fecha and not cleaned_data.get('tipo_cambio_fecha_proceso'):
+            self.add_error(
+                'tipo_cambio_fecha_proceso',
+                'Registra el tipo de cambio para la fecha del proceso o ingresalo manualmente.',
+            )
+
+        cantidad_consumida = cleaned_data.get('cantidad_consumida') or Decimal('0')
+        cantidad_exportable = cleaned_data.get('cantidad_exportable') or Decimal('0')
+        merma = cleaned_data.get('merma') or Decimal('0')
+        cantidad_subproductos = Decimal('0')
+        productos = []
+
+        for index in range(1, 4):
+            producto = cleaned_data.get(f'subproducto_{index}')
+            cantidad = cleaned_data.get(f'cantidad_subproducto_{index}')
+            valor = cleaned_data.get(f'valor_mercado_subproducto_{index}')
+            if producto or cantidad or valor is not None:
+                if not producto:
+                    self.add_error(f'subproducto_{index}', 'Selecciona el subproducto.')
+                if cantidad is None:
+                    self.add_error(f'cantidad_subproducto_{index}', 'Ingresa la cantidad.')
+                if valor is None:
+                    self.add_error(f'valor_mercado_subproducto_{index}', 'Ingresa el valor de mercado.')
+            if producto and cantidad:
+                cantidad_subproductos += cantidad
+                productos.append(producto.id)
+
+        producto_exportable = cleaned_data.get('producto_exportable')
+        if producto_exportable:
+            productos.append(producto_exportable.id)
+        if len(productos) != len(set(productos)):
+            raise forms.ValidationError('No repitas el mismo producto como exportable y subproducto.')
+
+        if cantidad_consumida and cantidad_exportable:
+            total_fisico = cantidad_exportable + cantidad_subproductos + merma
+            if total_fisico != cantidad_consumida:
+                raise forms.ValidationError(
+                    'La cantidad de pergamino debe ser igual a exportable + subproductos + merma.'
+                )
+        return cleaned_data
+
+
+def _tipo_cambio_sunat_venta(fecha):
+    tipo_cambio = TipoCambioSunat.objects.filter(
+        anio=fecha.year,
+        mes=MESES_POR_NUMERO[fecha.month],
+        dia=fecha.day,
+    ).first()
+    if tipo_cambio:
+        return tipo_cambio.venta
+    return None
