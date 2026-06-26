@@ -35,7 +35,16 @@
                 <label class="form-label" for="documento-busqueda">Documento</label>
                 <input class="form-control" id="documento-busqueda" name="documento" value="{{ documento_busqueda }}" placeholder="Serie, numero o tipo">
             </div>
-            <div class="col-sm-6 col-lg-3">
+            <div class="col-sm-6 col-lg-2">
+                <label class="form-label" for="estado-documentos">Estado</label>
+                <select class="form-select" id="estado-documentos" name="estado">
+                    <option value="">Todos</option>
+                    {% for codigo, nombre in estados %}
+                        <option value="{{ codigo }}" {% if estado == codigo %}selected{% endif %}>{{ nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-lg-2">
                 <label class="form-label" for="orden-documentos">Ordenar por</label>
                 <select class="form-select" id="orden-documentos" name="orden">
                     <option value="fecha" {% if orden == "fecha" %}selected{% endif %}>Fecha de emision</option>
@@ -43,7 +52,7 @@
                     <option value="estado" {% if orden == "estado" %}selected{% endif %}>Estado</option>
                 </select>
             </div>
-            <div class="col-sm-6 col-lg-2">
+            <div class="col-sm-6 col-lg-1">
                 <button class="btn btn-outline-primary w-100" type="submit">Aplicar</button>
             </div>
             <div class="col-sm-6 col-lg-1">

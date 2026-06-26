@@ -9,8 +9,10 @@
 
 <form class="card mb-3" method="get">
     <div class="card-body">
-        <div class="row g-2 align-items-end">
-            <div class="col-md-8">
+        <input type="hidden" name="sort" value="{{ sort }}">
+        <input type="hidden" name="order" value="{{ order }}">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-6 col-xl-4">
                 <label class="form-label" for="documento">Documento</label>
                 <select class="form-select" id="documento" name="documento">
                     <option value="">Todos los documentos</option>
@@ -21,7 +23,33 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-4">
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="fecha_desde">Fecha desde</label>
+                <input class="form-control" id="fecha_desde" name="fecha_desde" type="date" value="{{ fecha_desde }}">
+            </div>
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="fecha_hasta">Fecha hasta</label>
+                <input class="form-control" id="fecha_hasta" name="fecha_hasta" type="date" value="{{ fecha_hasta }}">
+            </div>
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="tipo_documento">Tipo documento</label>
+                <select class="form-select" id="tipo_documento" name="tipo_documento">
+                    <option value="">Todos</option>
+                    {% for value, label in tipos_documento %}
+                        <option value="{{ value }}" {% if tipo_documento == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="moneda">Moneda</label>
+                <select class="form-select" id="moneda" name="moneda">
+                    <option value="">Todas</option>
+                    {% for value in monedas %}
+                        <option value="{{ value }}" {% if moneda == value %}selected{% endif %}>{{ value }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
                 <button class="btn btn-primary" type="submit">Filtrar</button>
                 <button class="btn btn-outline-success" type="submit" name="export" value="excel">Exportar Excel</button>
                 <a class="btn btn-outline-secondary" href="{% url 'kardex:reporte_movimientos_documento' %}">Limpiar</a>
@@ -35,26 +63,25 @@
         <table class="table table-sm align-middle mb-0">
             <thead>
             <tr>
-                <th>Documento</th>
-                <th>Fecha</th>
-                <th>Entidad</th>
-                <th>Producto</th>
-                <th>Movimiento</th>
-                <th class="text-end">Entrada</th>
-                <th class="text-end">Salida</th>
-                <th class="text-end">Costo entrada</th>
-                <th class="text-end">Costo salida</th>
-                <th class="text-end">Stock final</th>
+                {% for header in sort_headers %}
+                    <th class="{{ header.css_class }}">
+                        <a class="text-decoration-none text-dark" href="{{ header.url }}">
+                            {{ header.label }}{% if header.active %} {{ header.direction }}{% endif %}
+                        </a>
+                    </th>
+                {% endfor %}
             </tr>
             </thead>
             <tbody>
             {% for mov in movimientos %}
                 <tr>
                     <td>{{ mov.documento_origen|default:"-" }}</td>
+                    <td>{% if mov.documento_origen %}{{ mov.documento_origen.tipo_documento_nombre }}{% else %}-{% endif %}</td>
                     <td>{{ mov.fecha|fecha_corta }}</td>
                     <td>{{ mov.entidad|default:"-" }}</td>
                     <td>{{ mov.producto }}</td>
                     <td>{{ mov.get_tipo_movimiento_display }}</td>
+                    <td>{% if mov.documento_origen %}{{ mov.documento_origen.moneda_mostrada }}{% else %}-{% endif %}</td>
                     <td class="text-end">{{ mov.cantidad_entrada|numero }}</td>
                     <td class="text-end">{{ mov.cantidad_salida|numero }}</td>
                     <td class="text-end">{{ mov.costo_total_entrada|numero }}</td>
@@ -62,7 +89,7 @@
                     <td class="text-end">{{ mov.stock_cantidad|numero }}</td>
                 </tr>
             {% empty %}
-                <tr><td colspan="10" class="text-secondary">No hay movimientos para el filtro seleccionado.</td></tr>
+                <tr><td colspan="12" class="text-secondary">No hay movimientos para el filtro seleccionado.</td></tr>
             {% endfor %}
             </tbody>
         </table>

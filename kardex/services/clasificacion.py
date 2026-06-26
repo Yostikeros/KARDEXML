@@ -4,6 +4,7 @@ from decimal import Decimal
 from django.db import transaction
 
 from kardex.models import Auditoria, Documento, DocumentoDetalle, MovimientoKardex, ProductoEquivalencia
+from kardex.services.unidades import normalizar_cantidad_kg, resolver_factor_conversion
 
 
 @transaction.atomic
@@ -18,10 +19,18 @@ def clasificar_detalle(
     if detalle.documento.estado == Documento.CONFIRMADO:
         raise ValueError("No se puede clasificar un documento confirmado.")
 
-    factor = Decimal(factor_conversion)
+    factor = resolver_factor_conversion(
+        detalle.unidad_medida_xml,
+        producto.unidad_base,
+        factor_conversion,
+        detalle.descripcion_xml,
+    )
     detalle.producto = producto
     detalle.factor_conversion = factor
-    detalle.cantidad_base = detalle.cantidad * factor
+    cantidad_base = detalle.cantidad * factor
+    if producto.unidad_base == 'KG':
+        cantidad_base = normalizar_cantidad_kg(cantidad_base)
+    detalle.cantidad_base = cantidad_base
     detalle.afecta_kardex = producto.afecta_kardex
     detalle.estado_clasificacion = (
         DocumentoDetalle.CLASIFICADO if producto.afecta_kardex else DocumentoDetalle.NO_APLICA

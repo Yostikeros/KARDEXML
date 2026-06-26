@@ -542,13 +542,25 @@ class MovimientoKardex(models.Model):
 
 class ProcesoProductivo(TimeStampedModel):
     TRILLADO = 'trillado'
+    BORRADOR = 'borrador'
+    CONFIRMADO = 'confirmado'
+    ANULADO = 'anulado'
 
     TIPO_PROCESO_CHOICES = [
         (TRILLADO, 'Cafe trillado'),
     ]
+    ESTADO_CHOICES = [
+        (BORRADOR, 'Borrador'),
+        (CONFIRMADO, 'Confirmado'),
+        (ANULADO, 'Anulado'),
+    ]
 
+    codigo_proceso = models.CharField(max_length=30, unique=True, null=True, blank=True)
     tipo_proceso = models.CharField(max_length=30, choices=TIPO_PROCESO_CHOICES, default=TRILLADO)
     fecha = models.DateField()
+    lote = models.CharField(max_length=100, blank=True)
+    factura_relacionada = models.CharField(max_length=100, blank=True)
+    fecha_factura_relacionada = models.DateField(null=True, blank=True)
     producto_consumido = models.ForeignKey(
         Producto,
         on_delete=models.PROTECT,
@@ -564,6 +576,7 @@ class ProcesoProductivo(TimeStampedModel):
     costo_exportable = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
     costo_unitario_exportable = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
     observaciones = models.TextField(blank=True)
+    estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=BORRADOR)
     confirmado = models.BooleanField(default=False)
     anulado = models.BooleanField(default=False)
     fecha_confirmacion = models.DateTimeField(null=True, blank=True)
@@ -580,12 +593,14 @@ class ProcesoProductivo(TimeStampedModel):
         verbose_name = 'proceso productivo'
         verbose_name_plural = 'procesos productivos'
         indexes = [
+            models.Index(fields=['codigo_proceso']),
             models.Index(fields=['fecha']),
+            models.Index(fields=['estado']),
             models.Index(fields=['confirmado']),
         ]
 
     def __str__(self):
-        return f'Proceso {self.id} - {self.fecha}'
+        return f'{self.codigo_proceso or "Proceso"} - {self.fecha}'
 
 
 class ProcesoProductoObtenido(models.Model):
@@ -601,7 +616,12 @@ class ProcesoProductoObtenido(models.Model):
     )
     es_principal = models.BooleanField(default=False)
     cantidad_obtenida = models.DecimalField(max_digits=18, decimal_places=6)
-    valor_mercado_unitario = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
+    valor_mercado_unitario_soles = models.DecimalField(
+        max_digits=18,
+        decimal_places=6,
+        default=Decimal('0'),
+        db_column='valor_mercado_unitario',
+    )
     costo_asignado = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
 
     class Meta:
@@ -616,6 +636,10 @@ class ProcesoProductoObtenido(models.Model):
 
     def __str__(self):
         return f'{self.proceso} - {self.producto}'
+
+    @property
+    def valor_mercado_unitario(self):
+        return self.valor_mercado_unitario_soles
 
 
 class Auditoria(models.Model):

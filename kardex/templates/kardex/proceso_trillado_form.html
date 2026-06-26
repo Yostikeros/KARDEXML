@@ -1,108 +1,388 @@
 {% extends "kardex/base.html" %}
 
 {% block content %}
-<div class="page-heading">
-    <div>
-        <h1>{% if proceso %}Editar proceso de trillado{% else %}Nuevo proceso de trillado{% endif %}</h1>
-        <p>Registra la transformacion fisica y el costo de proceso en dolares.</p>
-    </div>
-    <a class="btn btn-outline-secondary" href="{% url 'kardex:procesos_trillado_lista' %}">Volver</a>
-</div>
-
-<form method="post">
+<form method="post" class="process-document process-document-wide" id="trillado-form">
     {% csrf_token %}
     {% if form.non_field_errors %}
         <div class="alert alert-danger">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h2 class="h5 mb-3">Pergamino y costo de proceso</h2>
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ form.fecha.id_for_label }}">{{ form.fecha.label }}</label>
-                        {{ form.fecha }}
-                        {% for error in form.fecha.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ form.producto_consumido.id_for_label }}">{{ form.producto_consumido.label }}</label>
-                        {{ form.producto_consumido }}
-                        {% for error in form.producto_consumido.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label" for="{{ form.cantidad_consumida.id_for_label }}">{{ form.cantidad_consumida.label }}</label>
-                            {{ form.cantidad_consumida }}
-                            {% for error in form.cantidad_consumida.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label" for="{{ form.merma.id_for_label }}">{{ form.merma.label }}</label>
-                            {{ form.merma }}
-                            {% for error in form.merma.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                        </div>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label" for="{{ form.costo_proceso_usd.id_for_label }}">{{ form.costo_proceso_usd.label }}</label>
-                            {{ form.costo_proceso_usd }}
-                            {% for error in form.costo_proceso_usd.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label class="form-label" for="{{ form.tipo_cambio_fecha_proceso.id_for_label }}">{{ form.tipo_cambio_fecha_proceso.label }}</label>
-                            {{ form.tipo_cambio_fecha_proceso }}
-                            {% if form.tipo_cambio_fecha_proceso.help_text %}<div class="form-text">{{ form.tipo_cambio_fecha_proceso.help_text }}</div>{% endif %}
-                            {% for error in form.tipo_cambio_fecha_proceso.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                        </div>
-                    </div>
-                    <div class="mb-0">
-                        <label class="form-label" for="{{ form.observaciones.id_for_label }}">{{ form.observaciones.label }}</label>
-                        {{ form.observaciones }}
-                        {% for error in form.observaciones.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-                </div>
+    <div class="process-doc-header">
+        <div class="process-title">
+            <div class="process-title-icon">DOC</div>
+            <div>
+                <h1>Documento de Proceso de Trillado</h1>
+                <p>Transformacion fisica y costeo del cafe pergamino en cafe exportable y subproductos.</p>
             </div>
         </div>
-
-        <div class="col-lg-6">
-            <div class="card h-100">
-                <div class="card-body">
-                    <h2 class="h5 mb-3">Productos obtenidos</h2>
-                    <div class="mb-3">
-                        <label class="form-label" for="{{ form.producto_exportable.id_for_label }}">{{ form.producto_exportable.label }}</label>
-                        {{ form.producto_exportable }}
-                        {% for error in form.producto_exportable.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-                    <div class="mb-4">
-                        <label class="form-label" for="{{ form.cantidad_exportable.id_for_label }}">{{ form.cantidad_exportable.label }}</label>
-                        {{ form.cantidad_exportable }}
-                        {% for error in form.cantidad_exportable.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
-                    </div>
-
-                    <h3 class="h6 mb-3">Subproductos</h3>
-                    <div class="row g-2 mb-2">
-                        <div class="col-md-5"><label class="form-label" for="{{ form.subproducto_1.id_for_label }}">Subproducto 1</label>{{ form.subproducto_1 }}{% for error in form.subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                        <div class="col-md-3"><label class="form-label" for="{{ form.cantidad_subproducto_1.id_for_label }}">Cantidad</label>{{ form.cantidad_subproducto_1 }}{% for error in form.cantidad_subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                        <div class="col-md-4"><label class="form-label" for="{{ form.valor_mercado_subproducto_1.id_for_label }}">Valor mercado</label>{{ form.valor_mercado_subproducto_1 }}{% for error in form.valor_mercado_subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                    </div>
-                    <div class="row g-2 mb-2">
-                        <div class="col-md-5"><label class="form-label" for="{{ form.subproducto_2.id_for_label }}">Subproducto 2</label>{{ form.subproducto_2 }}{% for error in form.subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                        <div class="col-md-3"><label class="form-label" for="{{ form.cantidad_subproducto_2.id_for_label }}">Cantidad</label>{{ form.cantidad_subproducto_2 }}{% for error in form.cantidad_subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                        <div class="col-md-4"><label class="form-label" for="{{ form.valor_mercado_subproducto_2.id_for_label }}">Valor mercado</label>{{ form.valor_mercado_subproducto_2 }}{% for error in form.valor_mercado_subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-md-5"><label class="form-label" for="{{ form.subproducto_3.id_for_label }}">Subproducto 3</label>{{ form.subproducto_3 }}{% for error in form.subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                        <div class="col-md-3"><label class="form-label" for="{{ form.cantidad_subproducto_3.id_for_label }}">Cantidad</label>{{ form.cantidad_subproducto_3 }}{% for error in form.cantidad_subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                        <div class="col-md-4"><label class="form-label" for="{{ form.valor_mercado_subproducto_3.id_for_label }}">Valor mercado</label>{{ form.valor_mercado_subproducto_3 }}{% for error in form.valor_mercado_subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</div>
-                    </div>
-                </div>
+        <div class="process-doc-meta">
+            <div>
+                <span>Codigo</span>
+                <strong>{% if proceso %}{{ proceso.codigo_proceso }}{% else %}Automatico{% endif %}</strong>
             </div>
+            <div>
+                <label class="process-meta-label" for="{{ form.fecha.id_for_label }}">Fecha del proceso</label>
+                {{ form.fecha }}
+                {% for error in form.fecha.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            <div>
+                <span>Estado</span>
+                <strong>{% if proceso %}{{ proceso.get_estado_display }}{% else %}Borrador{% endif %}</strong>
+            </div>
+        </div>
+        <div class="process-actions">
+            <a class="btn btn-outline-secondary" href="{% url 'kardex:procesos_trillado_lista' %}">Volver</a>
+            <button class="btn btn-primary" type="submit">Guardar borrador</button>
+            {% if proceso and not proceso.confirmado %}
+                <button class="btn btn-success" type="submit" form="confirm-trillado-form">Confirmar Kardex</button>
+            {% endif %}
         </div>
     </div>
 
-    <div class="d-flex justify-content-end gap-2 mt-4">
+    <section class="process-doc-card process-general-card">
+    <div class="process-card-title">Datos generales</div>
+
+    <div class="process-general-grid">
+        <div class="process-field">
+            <label class="form-label" for="{{ form.lote.id_for_label }}">{{ form.lote.label }}</label>
+            {{ form.lote }}
+            {% for error in form.lote.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="process-field">
+            <label class="form-label" for="{{ form.factura_relacionada.id_for_label }}">{{ form.factura_relacionada.label }}</label>
+            {{ form.factura_relacionada }}
+            {% for error in form.factura_relacionada.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="process-field">
+            <label class="form-label" for="{{ form.fecha_factura_relacionada.id_for_label }}">Fecha factura</label>
+            {{ form.fecha_factura_relacionada }}
+            {% for error in form.fecha_factura_relacionada.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+    </div>
+</section>
+
+    <section class="process-doc-card process-origin-card">
+    <div class="process-card-title">1. Origen del proceso</div>
+
+    <div class="process-origin-form-grid">
+        <div class="process-field process-field-full">
+            <label class="form-label" for="{{ form.producto_consumido.id_for_label }}">Producto origen</label>
+            {{ form.producto_consumido }}
+            {% for error in form.producto_consumido.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="process-field">
+            <label class="form-label" for="{{ form.cantidad_consumida.id_for_label }}">KG origen</label>
+            {{ form.cantidad_consumida }}
+            {% for error in form.cantidad_consumida.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="process-field">
+            <label class="form-label" for="{{ form.costo_proceso_usd.id_for_label }}">{{ form.costo_proceso_usd.label }}</label>
+            {{ form.costo_proceso_usd }}
+            {% for error in form.costo_proceso_usd.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="process-field">
+            <label class="form-label">{{ form.tipo_cambio_fecha_proceso.label }}</label>
+            {{ form.tipo_cambio_fecha_proceso }}
+            <div class="readonly-calculated" id="tipo-cambio-display">-</div>
+            {% if form.tipo_cambio_fecha_proceso.help_text %}<div class="form-text">{{ form.tipo_cambio_fecha_proceso.help_text }}</div>{% endif %}
+            {% for error in form.tipo_cambio_fecha_proceso.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+
+        <div class="process-field process-field-full">
+            <label class="form-label" for="{{ form.observaciones.id_for_label }}">{{ form.observaciones.label }}</label>
+            {{ form.observaciones }}
+            {% for error in form.observaciones.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+        </div>
+    </div>
+</section>
+
+    <section class="process-doc-card">
+        <div class="process-card-heading">
+            <div class="process-card-title">2. Resultados del proceso</div>
+            <button class="btn btn-sm btn-outline-primary" type="button" id="add-subproduct">Agregar subproducto</button>
+        </div>
+        <div class="process-table-wrap">
+            <table class="process-results-table">
+                <thead>
+                    <tr>
+                        <th>Tipo</th>
+                        <th>Producto</th>
+                        <th>KG</th>
+                        <th>Valor mercado USD</th>
+                        <th>Costo asignado S/</th>
+                        <th>Rendimiento %</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr data-result-row="exportable">
+                        <td><span class="movement-badge movement-in">Exportable</span></td>
+                        <td>{{ form.producto_exportable }}{% for error in form.producto_exportable.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td>{{ form.cantidad_exportable }}{% for error in form.cantidad_exportable.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td><span class="calculated-value muted">-</span></td>
+                        <td><span class="calculated-value" id="costo-exportable-display">0.00</span></td>
+                        <td><span class="calculated-value" id="rend-exportable-display">0.00%</span></td>
+                        <td></td>
+                    </tr>
+                    <tr data-subproduct-row>
+                        <td><span class="movement-badge movement-neutral">Subproducto</span></td>
+                        <td>{{ form.subproducto_1 }}{% for error in form.subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td>{{ form.cantidad_subproducto_1 }}{% for error in form.cantidad_subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td>{{ form.valor_mercado_subproducto_1 }}{% for error in form.valor_mercado_subproducto_1.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td><span class="calculated-value subproduct-cost">0.00</span></td>
+                        <td><span class="calculated-value subproduct-yield">0.00%</span></td>
+                        <td><button class="btn btn-sm btn-outline-secondary subproduct-remove" type="button">Quitar</button></td>
+                    </tr>
+                    <tr class="{% if not form.subproducto_2.value and not form.cantidad_subproducto_2.value and not form.valor_mercado_subproducto_2.value and not form.subproducto_2.errors and not form.cantidad_subproducto_2.errors and not form.valor_mercado_subproducto_2.errors %}d-none{% endif %}" data-subproduct-row>
+                        <td><span class="movement-badge movement-neutral">Subproducto</span></td>
+                        <td>{{ form.subproducto_2 }}{% for error in form.subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td>{{ form.cantidad_subproducto_2 }}{% for error in form.cantidad_subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td>{{ form.valor_mercado_subproducto_2 }}{% for error in form.valor_mercado_subproducto_2.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td><span class="calculated-value subproduct-cost">0.00</span></td>
+                        <td><span class="calculated-value subproduct-yield">0.00%</span></td>
+                        <td><button class="btn btn-sm btn-outline-secondary subproduct-remove" type="button">Quitar</button></td>
+                    </tr>
+                    <tr class="{% if not form.subproducto_3.value and not form.cantidad_subproducto_3.value and not form.valor_mercado_subproducto_3.value and not form.subproducto_3.errors and not form.cantidad_subproducto_3.errors and not form.valor_mercado_subproducto_3.errors %}d-none{% endif %}" data-subproduct-row>
+                        <td><span class="movement-badge movement-neutral">Subproducto</span></td>
+                        <td>{{ form.subproducto_3 }}{% for error in form.subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td>{{ form.cantidad_subproducto_3 }}{% for error in form.cantidad_subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td>{{ form.valor_mercado_subproducto_3 }}{% for error in form.valor_mercado_subproducto_3.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td><span class="calculated-value subproduct-cost">0.00</span></td>
+                        <td><span class="calculated-value subproduct-yield">0.00%</span></td>
+                        <td><button class="btn btn-sm btn-outline-secondary subproduct-remove" type="button">Quitar</button></td>
+                    </tr>
+                    <tr data-result-row="merma">
+                        <td><span class="movement-badge movement-adjust">Merma</span></td>
+                        <td><span class="calculated-value muted">-</span></td>
+                        <td>{{ form.merma }}{% for error in form.merma.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}</td>
+                        <td><span class="calculated-value muted">-</span></td>
+                        <td><span class="calculated-value muted">-</span></td>
+                        <td><span class="calculated-value" id="rend-merma-display">0.00%</span></td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <section class="process-doc-card">
+        <div class="process-card-title">3. Resumen del proceso</div>
+        <div class="process-summary-grid">
+            <div class="process-summary-block">
+                <h2>Balance fisico</h2>
+                <dl>
+                    <div><dt>Total entrada KG</dt><dd id="summary-entrada">0.00</dd></div>
+                    <div><dt>Total salida KG</dt><dd id="summary-salida">0.00</dd></div>
+                    <div><dt>Diferencia KG</dt><dd id="summary-diferencia">0.00</dd></div>
+                    <div><dt>Estado del balance</dt><dd id="summary-balance">Pendiente</dd></div>
+                </dl>
+            </div>
+            <div class="process-summary-block">
+                <h2>Resumen valorizado</h2>
+                <dl>
+                    <div><dt>Costo pergamino</dt><dd id="summary-costo-pergamino">0.00</dd></div>
+                    <div><dt>Costo proceso S/</dt><dd id="summary-costo-proceso">0.00</dd></div>
+                    <div><dt>Costo total proceso</dt><dd id="summary-costo-total">0.00</dd></div>
+                    <div><dt>Costo subproductos</dt><dd id="summary-costo-subproductos">0.00</dd></div>
+                    <div><dt>Costo exportable</dt><dd id="summary-costo-exportable">0.00</dd></div>
+                    <div><dt>Costo unitario exportable</dt><dd id="summary-costo-unitario">0.000000</dd></div>
+                </dl>
+            </div>
+            <div class="process-summary-block">
+                <h2>Rendimientos</h2>
+                <dl>
+                    <div><dt>Rendimiento exportable %</dt><dd id="summary-rend-exportable">0.00%</dd></div>
+                    <div><dt>Rendimiento subproducto %</dt><dd id="summary-rend-subproducto">0.00%</dd></div>
+                    <div><dt>Rendimiento merma %</dt><dd id="summary-rend-merma">0.00%</dd></div>
+                </dl>
+            </div>
+        </div>
+    </section>
+
+    <div class="process-bottom-actions">
         <a class="btn btn-outline-secondary" href="{% url 'kardex:procesos_trillado_lista' %}">Cancelar</a>
-        <button class="btn btn-primary" type="submit">{% if proceso %}Guardar cambios{% else %}Guardar borrador{% endif %}</button>
+        <button class="btn btn-primary" type="submit">Guardar documento</button>
+        {% if proceso and not proceso.confirmado %}
+            <button class="btn btn-success" type="submit" form="confirm-trillado-form">Confirmar Kardex</button>
+        {% endif %}
     </div>
 </form>
+
+{% if proceso and not proceso.confirmado %}
+<form id="confirm-trillado-form" method="post" action="{% url 'kardex:confirmar_proceso_trillado' proceso.id %}">
+    {% csrf_token %}
+</form>
+{% endif %}
+
+{{ tipos_cambio_fecha|json_script:"tipos-cambio-fecha" }}
+{{ saldos_producto|json_script:"saldos-producto" }}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const tipoCambioPorFecha = JSON.parse(document.getElementById('tipos-cambio-fecha')?.textContent || '{}');
+    const saldosPorProducto = JSON.parse(document.getElementById('saldos-producto')?.textContent || '{}');
+    const fechaProceso = document.getElementById('{{ form.fecha.id_for_label }}');
+    const productoOrigen = document.getElementById('{{ form.producto_consumido.id_for_label }}');
+    const tipoCambioInput = document.getElementById('{{ form.tipo_cambio_fecha_proceso.id_for_label }}');
+    const tipoCambioDisplay = document.getElementById('tipo-cambio-display');
+    const numberOf = (id) => {
+        const el = document.getElementById(id);
+        const value = el ? parseFloat(el.value || '0') : 0;
+        return Number.isFinite(value) ? value : 0;
+    };
+    const money = (value) => value.toFixed(2);
+    const kg = (value) => value.toFixed(2);
+    const unit = (value) => value.toFixed(6);
+    const pct = (value) => value.toFixed(2) + '%';
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+    const rows = Array.from(document.querySelectorAll('[data-subproduct-row]'));
+    const addButton = document.getElementById('add-subproduct');
+    const recalcIds = [
+        '{{ form.cantidad_consumida.id_for_label }}',
+        '{{ form.cantidad_exportable.id_for_label }}',
+        '{{ form.merma.id_for_label }}',
+        '{{ form.costo_proceso_usd.id_for_label }}',
+        '{{ form.tipo_cambio_fecha_proceso.id_for_label }}',
+        '{{ form.cantidad_subproducto_1.id_for_label }}',
+        '{{ form.cantidad_subproducto_2.id_for_label }}',
+        '{{ form.cantidad_subproducto_3.id_for_label }}',
+        '{{ form.valor_mercado_subproducto_1.id_for_label }}',
+        '{{ form.valor_mercado_subproducto_2.id_for_label }}',
+        '{{ form.valor_mercado_subproducto_3.id_for_label }}'
+    ];
+
+    function updateAddButton() {
+        if (!addButton) return;
+        addButton.disabled = !rows.some(row => row.classList.contains('d-none'));
+    }
+
+    function clearRow(row) {
+        row.querySelectorAll('input, select').forEach((input) => {
+            if (!input.readOnly) input.value = '';
+        });
+    }
+
+    function updateTipoCambioFromFecha() {
+        if (!fechaProceso || !tipoCambioInput) return;
+        if (!tipoCambioInput.dataset.persisted) {
+            const tc = tipoCambioPorFecha[fechaProceso.value];
+            tipoCambioInput.value = tc || '';
+        }
+        if (tipoCambioDisplay) tipoCambioDisplay.textContent = tipoCambioInput.value || 'Sin TC registrado';
+    }
+
+    function stockOrigenFecha() {
+        const productoId = productoOrigen ? productoOrigen.value : '';
+        const fecha = fechaProceso ? fechaProceso.value : '';
+        const saldos = saldosPorProducto[productoId] || [];
+        let elegido = null;
+        saldos.forEach((saldo) => {
+            if (fecha && saldo.fecha <= fecha) elegido = saldo;
+        });
+        return elegido;
+    }
+
+    function recalc() {
+        const origen = numberOf('{{ form.cantidad_consumida.id_for_label }}');
+        const exportable = numberOf('{{ form.cantidad_exportable.id_for_label }}');
+        const merma = numberOf('{{ form.merma.id_for_label }}');
+        const costoUsd = numberOf('{{ form.costo_proceso_usd.id_for_label }}');
+        const tc = numberOf('{{ form.tipo_cambio_fecha_proceso.id_for_label }}');
+        const costoProceso = costoUsd * tc;
+        let subKg = 0;
+        let subCosto = 0;
+
+        rows.forEach((row) => {
+            const inputs = row.querySelectorAll('input');
+            const cantidad = parseFloat(inputs[0]?.value || '0') || 0;
+            const valorUsd = parseFloat(inputs[1]?.value || '0') || 0;
+            const costo = cantidad * valorUsd * tc;
+            subKg += cantidad;
+            subCosto += costo;
+            const costoDisplay = row.querySelector('.subproduct-cost');
+            const yieldDisplay = row.querySelector('.subproduct-yield');
+            if (costoDisplay) costoDisplay.textContent = money(costo);
+            if (yieldDisplay) yieldDisplay.textContent = pct(origen ? (cantidad / origen) * 100 : 0);
+        });
+
+        const totalSalida = exportable + subKg + merma;
+        const rawDiff = origen - totalSalida;
+        const diff = Math.abs(rawDiff) <= 0.0001 ? 0 : rawDiff;
+        const stockOrigen = stockOrigenFecha();
+        const costoPromedioPergamino = stockOrigen ? (parseFloat(stockOrigen.promedio || '0') || 0) : 0;
+        const costoPergamino = origen * costoPromedioPergamino;
+        const costoTotal = costoPergamino + costoProceso;
+        const costoExportable = costoTotal - subCosto;
+        const costoUnitario = exportable ? costoExportable / exportable : 0;
+        const rendExportable = origen ? (exportable / origen) * 100 : 0;
+        const rendSubproducto = origen ? (subKg / origen) * 100 : 0;
+        const rendMerma = origen ? (merma / origen) * 100 : 0;
+
+        setText('costo-exportable-display', money(costoExportable));
+        setText('rend-exportable-display', pct(rendExportable));
+        setText('rend-merma-display', pct(rendMerma));
+
+        setText('summary-entrada', kg(origen));
+        setText('summary-salida', kg(totalSalida));
+        setText('summary-diferencia', kg(diff));
+        setText('summary-balance', diff === 0 && origen > 0 ? 'Correcto' : 'Pendiente');
+        setText('summary-costo-pergamino', money(costoPergamino));
+        setText('summary-costo-proceso', money(costoProceso));
+        setText('summary-costo-total', money(costoTotal));
+        setText('summary-costo-subproductos', money(subCosto));
+        setText('summary-costo-exportable', money(costoExportable));
+        setText('summary-costo-unitario', unit(costoUnitario));
+        setText('summary-rend-exportable', pct(rendExportable));
+        setText('summary-rend-subproducto', pct(rendSubproducto));
+        setText('summary-rend-merma', pct(rendMerma));
+    }
+
+    recalcIds.forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('input', recalc);
+    });
+    if (productoOrigen) {
+        productoOrigen.addEventListener('input', recalc);
+    }
+    if (fechaProceso) {
+        fechaProceso.addEventListener('input', () => {
+            if (tipoCambioInput) tipoCambioInput.dataset.persisted = '';
+            updateTipoCambioFromFecha();
+            recalc();
+        });
+    }
+    rows.forEach((row, index) => {
+        const remove = row.querySelector('.subproduct-remove');
+        if (remove) {
+            remove.addEventListener('click', () => {
+                clearRow(row);
+                if (index > 0) row.classList.add('d-none');
+                updateAddButton();
+                recalc();
+            });
+        }
+        row.querySelectorAll('input, select').forEach((input) => input.addEventListener('input', recalc));
+    });
+    if (addButton) {
+        addButton.addEventListener('click', () => {
+            const next = rows.find(row => row.classList.contains('d-none'));
+            if (next) next.classList.remove('d-none');
+            updateAddButton();
+        });
+    }
+    if (tipoCambioInput && tipoCambioInput.value) {
+        tipoCambioInput.dataset.persisted = '1';
+    }
+    updateTipoCambioFromFecha();
+    updateAddButton();
+    recalc();
+});
+</script>
 {% endblock %}

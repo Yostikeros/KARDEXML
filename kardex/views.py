@@ -40,6 +40,7 @@ from .services.kardex import (
     KardexError,
     confirmar_documento_kardex,
     confirmar_documentos_kardex,
+    devolver_documento_a_pendiente,
     editar_stock_inicial,
     registrar_stock_inicial,
     revertir_aprobacion_kardex,
@@ -47,8 +48,11 @@ from .services.kardex import (
 )
 from .services.procesos import anular_proceso_trillado, actualizar_proceso_trillado, confirmar_proceso_trillado, crear_proceso_trillado
 from .services.reportes import (
+    entidad_documento_reporte,
     obtener_empresa_principal,
     obtener_documentos_importados,
+    obtener_documentos_mensual,
+    obtener_documentos_mensual_detalle,
     obtener_kardex_sunat_producto,
     obtener_movimientos_documento,
     obtener_movimientos_producto,
@@ -225,9 +229,12 @@ def documentos_lista_view(request):
     documentos = obtener_documentos_importados()
     orden = request.GET.get("orden") or "fecha"
     tipo_documento = request.GET.get("tipo_documento") or ""
+    estado = request.GET.get("estado") or ""
     documento_busqueda = (request.GET.get("documento") or "").strip()
     if tipo_documento:
         documentos = documentos.filter(tipo_documento=tipo_documento)
+    if estado:
+        documentos = documentos.filter(estado=estado)
     if documento_busqueda:
         documentos = documentos.filter(
             Q(serie__icontains=documento_busqueda)
@@ -249,8 +256,10 @@ def documentos_lista_view(request):
             "form": form,
             "orden": orden,
             "tipo_documento": tipo_documento,
+            "estado": estado,
             "documento_busqueda": documento_busqueda,
             "tipos_documento": Documento.TIPO_DOCUMENTO_LABELS.items(),
+            "estados": Documento.ESTADO_CHOICES,
         },
     )
 
@@ -435,6 +444,19 @@ def revertir_aprobacion_kardex_view(request, documento_id):
 
 
 @login_required(login_url="/admin/login/")
+@require_POST
+def devolver_documento_pendiente_view(request, documento_id):
+    documento = get_object_or_404(Documento, pk=documento_id)
+    try:
+        devolver_documento_a_pendiente(documento, user=request.user)
+        messages.success(request, "Documento devuelto al estado pendiente de clasificacion.")
+        return redirect("kardex:clasificar_documento", documento_id=documento.id)
+    except KardexError as exc:
+        messages.error(request, str(exc))
+    return redirect("kardex:pre_kardex_documento", documento_id=documento.id)
+
+
+@login_required(login_url="/admin/login/")
 def stock_inicial_view(request):
     form = StockInicialForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
@@ -470,7 +492,11 @@ def proceso_trillado_crear_view(request):
         proceso = crear_proceso_trillado(form.cleaned_data, user=request.user)
         messages.success(request, "Proceso de trillado registrado. Revisa los calculos y confirma para afectar Kardex.")
         return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
-    return render(request, "kardex/proceso_trillado_form.html", {"form": form})
+    return render(
+        request,
+        "kardex/proceso_trillado_form.html",
+        {"form": form, "tipos_cambio_fecha": _tipos_cambio_fecha_json(), "saldos_producto": _saldos_producto_json()},
+    )
 
 
 @login_required(login_url="/admin/login/")
@@ -484,24 +510,32 @@ def proceso_trillado_editar_view(request, proceso_id):
         messages.error(request, "No se puede editar un proceso confirmado. Anula y registra un nuevo proceso.")
         return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
 
-    form = ProcesoTrilladoForm(request.POST or None, initial=_initial_proceso_trillado(proceso))
+    form = ProcesoTrilladoForm(
+        request.POST or None,
+        initial=_initial_proceso_trillado(proceso),
+        tipo_cambio_proceso=proceso.tipo_cambio_fecha_proceso,
+        fecha_proceso=proceso.fecha,
+    )
     if request.method == "POST" and form.is_valid():
         fecha_cambio = form.cleaned_data["fecha"] != proceso.fecha
-        tipo_cambio_anterior = proceso.tipo_cambio_fecha_proceso
-        tipo_cambio_enviado = form.cleaned_data["tipo_cambio_fecha_proceso"]
-        if fecha_cambio and tipo_cambio_enviado == tipo_cambio_anterior:
-            form.add_error(
-                "tipo_cambio_fecha_proceso",
-                "La fecha cambio. Actualiza el tipo de cambio de la nueva fecha antes de guardar.",
-            )
-        else:
-            try:
-                actualizar_proceso_trillado(proceso, form.cleaned_data)
-                messages.success(request, "Proceso de trillado actualizado.")
-                return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
-            except KardexError as exc:
-                messages.error(request, str(exc))
-    return render(request, "kardex/proceso_trillado_form.html", {"form": form, "proceso": proceso})
+        if not fecha_cambio:
+            form.cleaned_data["tipo_cambio_fecha_proceso"] = proceso.tipo_cambio_fecha_proceso
+        try:
+            actualizar_proceso_trillado(proceso, form.cleaned_data)
+            messages.success(request, "Proceso de trillado actualizado.")
+            return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
+        except KardexError as exc:
+            messages.error(request, str(exc))
+    return render(
+        request,
+        "kardex/proceso_trillado_form.html",
+        {
+            "form": form,
+            "proceso": proceso,
+            "tipos_cambio_fecha": _tipos_cambio_fecha_json(),
+            "saldos_producto": _saldos_producto_json(),
+        },
+    )
 
 
 @login_required(login_url="/admin/login/")
@@ -542,6 +576,9 @@ def anular_proceso_trillado_view(request, proceso_id):
 def _initial_proceso_trillado(proceso):
     initial = {
         "fecha": proceso.fecha,
+        "lote": proceso.lote,
+        "factura_relacionada": proceso.factura_relacionada,
+        "fecha_factura_relacionada": proceso.fecha_factura_relacionada,
         "producto_consumido": proceso.producto_consumido,
         "cantidad_consumida": proceso.cantidad_consumida,
         "costo_proceso_usd": proceso.costo_proceso_usd,
@@ -556,8 +593,59 @@ def _initial_proceso_trillado(proceso):
     for index, item in enumerate(proceso.productos_obtenidos.filter(es_principal=False).order_by("id")[:3], start=1):
         initial[f"subproducto_{index}"] = item.producto
         initial[f"cantidad_subproducto_{index}"] = item.cantidad_obtenida
-        initial[f"valor_mercado_subproducto_{index}"] = item.valor_mercado_unitario
+        if proceso.tipo_cambio_fecha_proceso:
+            initial[f"valor_mercado_subproducto_{index}"] = item.valor_mercado_unitario_soles / proceso.tipo_cambio_fecha_proceso
+        else:
+            initial[f"valor_mercado_subproducto_{index}"] = item.valor_mercado_unitario_soles
     return initial
+
+
+def _tipos_cambio_fecha_json():
+    return {
+        f"{tipo.anio:04d}-{_mes_numero(tipo.mes):02d}-{tipo.dia:02d}": str(tipo.venta)
+        for tipo in TipoCambioSunat.objects.all()
+    }
+
+
+def _saldos_producto_json():
+    saldos = {}
+    movimientos = MovimientoKardex.objects.order_by("producto_id", "fecha", "id").values(
+        "producto_id",
+        "fecha",
+        "id",
+        "stock_cantidad",
+        "stock_costo_unitario_promedio",
+        "stock_costo_total",
+    )
+    for movimiento in movimientos:
+        saldos.setdefault(str(movimiento["producto_id"]), []).append(
+            {
+                "fecha": movimiento["fecha"].isoformat(),
+                "id": movimiento["id"],
+                "cantidad": str(movimiento["stock_cantidad"]),
+                "promedio": str(movimiento["stock_costo_unitario_promedio"]),
+                "costo_total": str(movimiento["stock_costo_total"]),
+            }
+        )
+    return saldos
+
+
+def _mes_numero(mes):
+    meses = {
+        "enero": 1,
+        "febrero": 2,
+        "marzo": 3,
+        "abril": 4,
+        "mayo": 5,
+        "junio": 6,
+        "julio": 7,
+        "agosto": 8,
+        "septiembre": 9,
+        "octubre": 10,
+        "noviembre": 11,
+        "diciembre": 12,
+    }
+    return meses[mes]
 
 
 @login_required(login_url="/admin/login/")
@@ -789,6 +877,196 @@ def reporte_kardex_sunat_producto_view(request):
 
 
 @login_required(login_url="/admin/login/")
+def reporte_documentos_mensual_view(request):
+    filtros = _filtros_documentos_mensual(request)
+    items = obtener_documentos_mensual(**filtros["valores"])
+    query_params = request.GET.copy()
+    query_params.pop("export", None)
+    for item in items:
+        detalle_params = query_params.copy()
+        item.detalle_query = detalle_params.urlencode()
+
+    if request.GET.get("export") == "excel":
+        return generar_excel_response(
+            "documentos_por_mes.xlsx",
+            "Documentos por mes",
+            [
+                "Anio",
+                "Mes",
+                "Facturas de venta",
+                "Facturas de compra",
+                "Liquidaciones de compra",
+                "Total documentos",
+                "Total ventas",
+                "Total compras",
+                "Total liquidaciones",
+                "Total general",
+            ],
+            [
+                [
+                    item.anio,
+                    item.mes_nombre,
+                    item.facturas_venta,
+                    item.facturas_compra,
+                    item.liquidaciones_compra,
+                    item.total_documentos,
+                    item.total_ventas,
+                    item.total_compras,
+                    item.total_liquidaciones,
+                    item.total_general,
+                ]
+                for item in items
+            ],
+            metadata=_metadata_documentos_mensual(filtros),
+        )
+
+    return render(
+        request,
+        "kardex/reporte_documentos_mensual.html",
+        {
+            "items": items,
+            **filtros["context"],
+        },
+    )
+
+
+@login_required(login_url="/admin/login/")
+def reporte_documentos_mensual_detalle_view(request, anio, mes):
+    filtros = _filtros_documentos_mensual(request)
+    documentos = obtener_documentos_mensual_detalle(anio, mes, **filtros["valores"])
+    filas = [_fila_detalle_documento_mensual(documento) for documento in documentos]
+    mes_nombre = {
+        1: "Enero",
+        2: "Febrero",
+        3: "Marzo",
+        4: "Abril",
+        5: "Mayo",
+        6: "Junio",
+        7: "Julio",
+        8: "Agosto",
+        9: "Septiembre",
+        10: "Octubre",
+        11: "Noviembre",
+        12: "Diciembre",
+    }.get(mes, str(mes))
+
+    if request.GET.get("export") == "excel":
+        return generar_excel_response(
+            f"documentos_{anio}_{mes:02d}.xlsx",
+            f"{anio}-{mes:02d}",
+            [
+                "Fecha emision",
+                "Tipo operacion",
+                "Tipo documento",
+                "Serie",
+                "Numero",
+                "RUC entidad",
+                "Nombre entidad",
+                "Moneda",
+                "Base imponible",
+                "IGV",
+                "Total",
+                "Estado",
+            ],
+            [
+                [
+                    fila["documento"].fecha_emision,
+                    fila["documento"].tipo_operacion_nombre,
+                    fila["documento"].tipo_documento_nombre,
+                    fila["documento"].serie,
+                    fila["documento"].numero,
+                    fila["entidad"].numero_documento if fila["entidad"] else "",
+                    fila["entidad"].razon_social if fila["entidad"] else "",
+                    fila["documento"].moneda_mostrada,
+                    fila["base_imponible"],
+                    fila["igv"],
+                    fila["documento"].total,
+                    fila["documento"].get_estado_display(),
+                ]
+                for fila in filas
+            ],
+            metadata=[("Periodo", f"{mes_nombre} {anio}"), *_metadata_documentos_mensual(filtros)],
+        )
+
+    query_params = request.GET.copy()
+    query_params.pop("export", None)
+    return render(
+        request,
+        "kardex/reporte_documentos_mensual_detalle.html",
+        {
+            "anio": anio,
+            "mes": mes,
+            "mes_nombre": mes_nombre,
+            "filas": filas,
+            "querystring": query_params.urlencode(),
+            **filtros["context"],
+        },
+    )
+
+
+def _filtros_documentos_mensual(request):
+    fecha_desde_raw = request.GET.get("fecha_desde") or ""
+    fecha_hasta_raw = request.GET.get("fecha_hasta") or ""
+    tipo_operacion = request.GET.get("tipo_operacion") or ""
+    tipo_documento = request.GET.get("tipo_documento") or ""
+    entidad_id = request.GET.get("entidad") or ""
+    estado = request.GET.get("estado") or ""
+    fecha_desde = parse_date(fecha_desde_raw) if fecha_desde_raw else None
+    fecha_hasta = parse_date(fecha_hasta_raw) if fecha_hasta_raw else None
+
+    return {
+        "valores": {
+            "fecha_desde": fecha_desde,
+            "fecha_hasta": fecha_hasta,
+            "tipo_operacion": tipo_operacion or None,
+            "tipo_documento": tipo_documento or None,
+            "entidad_id": entidad_id or None,
+            "estado": estado or None,
+        },
+        "context": {
+            "fecha_desde": fecha_desde_raw,
+            "fecha_hasta": fecha_hasta_raw,
+            "tipo_operacion": tipo_operacion,
+            "tipo_documento": tipo_documento,
+            "entidad_id": entidad_id,
+            "estado": estado,
+            "entidades": Entidad.objects.order_by("razon_social"),
+            "estados": Documento.ESTADO_CHOICES,
+            "tipos_operacion": [
+                (Documento.COMPRA, "Compra"),
+                (Documento.VENTA, "Venta"),
+            ],
+            "tipos_documento": [
+                (Documento.FACTURA, "Factura"),
+                (Documento.LIQUIDACION_COMPRA, "Liquidacion de compra"),
+            ],
+        },
+    }
+
+
+def _metadata_documentos_mensual(filtros):
+    context = filtros["context"]
+    return [
+        ("Fecha desde", context["fecha_desde"] or "Todos"),
+        ("Fecha hasta", context["fecha_hasta"] or "Todos"),
+        ("Tipo operacion", context["tipo_operacion"] or "Todos"),
+        ("Tipo documento", context["tipo_documento"] or "Todos"),
+        ("Entidad", context["entidad_id"] or "Todas"),
+        ("Estado", context["estado"] or "Todos excepto anulados"),
+    ]
+
+
+def _fila_detalle_documento_mensual(documento):
+    detalles = list(documento.detalles.all())
+    return {
+        "documento": documento,
+        "entidad": entidad_documento_reporte(documento),
+        "base_imponible": sum((detalle.subtotal for detalle in detalles), Decimal("0")),
+        "igv": sum((detalle.igv for detalle in detalles), Decimal("0")),
+    }
+
+
+@login_required(login_url="/admin/login/")
 def reporte_documentos_importados_view(request):
     estado = request.GET.get("estado") or None
     documentos = obtener_documentos_importados()
@@ -817,22 +1095,40 @@ def reporte_documentos_importados_view(request):
 
 @login_required(login_url="/admin/login/")
 def reporte_movimientos_documento_view(request):
-    documento_id = request.GET.get("documento") or None
+    filtros = _filtros_movimientos_documento(request)
     documentos = Documento.objects.order_by("-fecha_emision", "-id")
-    movimientos = obtener_movimientos_documento(documento_id=documento_id)
+    movimientos = obtener_movimientos_documento(**filtros["valores"])
+    sort_headers = _sort_headers_movimientos_documento(request, filtros["sort"], filtros["order"])
+    monedas = Documento.objects.exclude(moneda="").values_list("moneda", flat=True).distinct().order_by("moneda")
+    documento_id = filtros["context"]["documento_id"]
     documento_seleccionado = get_object_or_404(Documento, pk=documento_id) if documento_id else None
     if request.GET.get("export") == "excel":
         return generar_excel_response(
             "movimientos_documento.xlsx",
             "Movimientos",
-            ["Documento", "Fecha", "Entidad", "Producto", "Movimiento", "Entrada", "Salida", "Costo entrada", "Costo salida", "Stock final"],
+            [
+                "Documento",
+                "Tipo documento",
+                "Fecha",
+                "Entidad",
+                "Producto",
+                "Movimiento",
+                "Moneda",
+                "Entrada",
+                "Salida",
+                "Costo entrada",
+                "Costo salida",
+                "Stock final",
+            ],
             [
                 [
                     str(mov.documento_origen) if mov.documento_origen else "",
+                    mov.documento_origen.tipo_documento_nombre if mov.documento_origen else "",
                     mov.fecha,
                     str(mov.entidad) if mov.entidad else "",
                     str(mov.producto),
                     mov.get_tipo_movimiento_display(),
+                    mov.documento_origen.moneda_mostrada if mov.documento_origen else "",
                     mov.cantidad_entrada,
                     mov.cantidad_salida,
                     mov.costo_total_entrada,
@@ -841,6 +1137,129 @@ def reporte_movimientos_documento_view(request):
                 ]
                 for mov in movimientos
             ],
-            metadata=[("Documento", str(documento_seleccionado) if documento_seleccionado else "Todos")],
+            metadata=_metadata_movimientos_documento(filtros, documento_seleccionado),
         )
-    return render(request, "kardex/reporte_movimientos_documento.html", {"documentos": documentos, "documento_seleccionado": documento_seleccionado, "movimientos": movimientos})
+    return render(
+        request,
+        "kardex/reporte_movimientos_documento.html",
+        {
+            "documentos": documentos,
+            "documento_seleccionado": documento_seleccionado,
+            "movimientos": movimientos,
+            "sort_headers": sort_headers,
+            "sort": filtros["sort"],
+            "order": filtros["order"],
+            "monedas": monedas,
+            "tipos_documento": [
+                (Documento.FACTURA, "Factura"),
+                (Documento.LIQUIDACION_COMPRA, "Liquidacion de compra"),
+            ],
+            **filtros["context"],
+        },
+    )
+
+
+def _filtros_movimientos_documento(request):
+    documento_id = request.GET.get("documento") or ""
+    fecha_desde_raw = request.GET.get("fecha_desde") or ""
+    fecha_hasta_raw = request.GET.get("fecha_hasta") or ""
+    tipo_documento = request.GET.get("tipo_documento") or ""
+    moneda = request.GET.get("moneda") or ""
+    sort = request.GET.get("sort") or "fecha"
+    order = request.GET.get("order") or "asc"
+    fecha_desde = parse_date(fecha_desde_raw) if fecha_desde_raw else None
+    fecha_hasta = parse_date(fecha_hasta_raw) if fecha_hasta_raw else None
+    ordering = _ordering_movimientos_documento(sort, order)
+
+    return {
+        "valores": {
+            "documento_id": documento_id or None,
+            "fecha_desde": fecha_desde,
+            "fecha_hasta": fecha_hasta,
+            "tipo_documento": tipo_documento or None,
+            "moneda": moneda or None,
+            "ordering": ordering,
+        },
+        "context": {
+            "documento_id": documento_id,
+            "fecha_desde": fecha_desde_raw,
+            "fecha_hasta": fecha_hasta_raw,
+            "tipo_documento": tipo_documento,
+            "moneda": moneda,
+        },
+        "sort": sort,
+        "order": order if order in {"asc", "desc"} else "asc",
+    }
+
+
+def _ordering_movimientos_documento(sort, order):
+    allowed = {
+        "documento": ["documento_origen__serie", "documento_origen__numero", "id"],
+        "tipo_documento": ["documento_origen__tipo_documento", "id"],
+        "fecha": ["fecha", "id"],
+        "entidad": ["entidad__razon_social", "id"],
+        "producto": ["producto__nombre", "id"],
+        "movimiento": ["tipo_movimiento", "id"],
+        "moneda": ["documento_origen__moneda", "id"],
+        "entrada": ["cantidad_entrada", "id"],
+        "salida": ["cantidad_salida", "id"],
+        "costo_entrada": ["costo_total_entrada", "id"],
+        "costo_salida": ["costo_total_salida", "id"],
+        "stock": ["stock_cantidad", "id"],
+    }
+    fields = allowed.get(sort, allowed["fecha"])
+    if order == "desc":
+        return [f"-{field}" for field in fields]
+    return fields
+
+
+def _sort_headers_movimientos_documento(request, current_sort, current_order):
+    columns = [
+        ("documento", "Documento", ""),
+        ("tipo_documento", "Tipo doc.", ""),
+        ("fecha", "Fecha", ""),
+        ("entidad", "Entidad", ""),
+        ("producto", "Producto", ""),
+        ("movimiento", "Movimiento", ""),
+        ("moneda", "Moneda", ""),
+        ("entrada", "Entrada", "text-end"),
+        ("salida", "Salida", "text-end"),
+        ("costo_entrada", "Costo entrada", "text-end"),
+        ("costo_salida", "Costo salida", "text-end"),
+        ("stock", "Stock final", "text-end"),
+    ]
+    query_params = request.GET.copy()
+    query_params.pop("export", None)
+    headers = []
+    for key, label, css_class in columns:
+        params = query_params.copy()
+        next_order = "desc" if current_sort == key and current_order == "asc" else "asc"
+        params["sort"] = key
+        params["order"] = next_order
+        headers.append(
+            {
+                "label": label,
+                "css_class": css_class,
+                "url": f"?{params.urlencode()}",
+                "active": current_sort == key,
+                "direction": "↑" if current_order == "asc" else "↓",
+            }
+        )
+    return headers
+
+
+def _metadata_movimientos_documento(filtros, documento_seleccionado):
+    context = filtros["context"]
+    tipo_documento_label = dict(
+        [
+            (Documento.FACTURA, "Factura"),
+            (Documento.LIQUIDACION_COMPRA, "Liquidacion de compra"),
+        ]
+    ).get(context["tipo_documento"], "Todos")
+    return [
+        ("Documento", str(documento_seleccionado) if documento_seleccionado else "Todos"),
+        ("Fecha desde", context["fecha_desde"] or "Todos"),
+        ("Fecha hasta", context["fecha_hasta"] or "Todos"),
+        ("Tipo documento", tipo_documento_label),
+        ("Moneda", context["moneda"] or "Todas"),
+    ]

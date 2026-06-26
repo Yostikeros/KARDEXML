@@ -33,6 +33,12 @@
                 <button class="btn btn-outline-danger" type="submit">Revertir aprobacion</button>
             </form>
         {% endif %}
+        {% if documento.estado == "pre_kardex" or documento.estado == "confirmado" %}
+            <form method="post" action="{% url 'kardex:devolver_documento_pendiente' documento.id %}">
+                {% csrf_token %}
+                <button class="btn btn-danger" type="submit">Devolver a pendiente</button>
+            </form>
+        {% endif %}
     </div>
 </div>
 

@@ -7,6 +7,12 @@
     <div class="d-flex gap-2">
         <a class="btn btn-outline-secondary" href="{% url 'kardex:documentos_pendientes' %}">Pendientes</a>
         <a class="btn btn-primary" href="{% url 'kardex:clasificar_documento' documento.id %}">Clasificar</a>
+        {% if documento.estado == "pre_kardex" or documento.estado == "confirmado" %}
+            <form method="post" action="{% url 'kardex:devolver_documento_pendiente' documento.id %}">
+                {% csrf_token %}
+                <button class="btn btn-outline-danger" type="submit">Devolver a pendiente</button>
+            </form>
+        {% endif %}
     </div>
 </div>
 

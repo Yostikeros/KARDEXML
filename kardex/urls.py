@@ -32,6 +32,7 @@ urlpatterns = [
     path('documentos/<int:documento_id>/confirmar-kardex/', views.confirmar_kardex_documento_view, name='confirmar_kardex_documento'),
     path('documentos/<int:documento_id>/revertir-pre-kardex/', views.revertir_pre_kardex_view, name='revertir_pre_kardex'),
     path('documentos/<int:documento_id>/revertir-aprobacion/', views.revertir_aprobacion_kardex_view, name='revertir_aprobacion_kardex'),
+    path('documentos/<int:documento_id>/devolver-pendiente/', views.devolver_documento_pendiente_view, name='devolver_documento_pendiente'),
     path('stock-inicial/', views.stock_inicial_view, name='stock_inicial'),
     path('procesos/trillado/', views.procesos_trillado_lista_view, name='procesos_trillado_lista'),
     path('procesos/trillado/nuevo/', views.proceso_trillado_crear_view, name='proceso_trillado_crear'),
@@ -48,6 +49,8 @@ urlpatterns = [
     path('reportes/stock-actual/', views.reporte_stock_actual_view, name='reporte_stock_actual'),
     path('reportes/kardex-producto/', views.reporte_kardex_producto_view, name='reporte_kardex_producto'),
     path('reportes/kardex-sunat-producto/', views.reporte_kardex_sunat_producto_view, name='reporte_kardex_sunat_producto'),
+    path('reportes/documentos-mensual/', views.reporte_documentos_mensual_view, name='reporte_documentos_mensual'),
+    path('reportes/documentos-mensual/<int:anio>/<int:mes>/', views.reporte_documentos_mensual_detalle_view, name='reporte_documentos_mensual_detalle'),
     path('reportes/documentos-importados/', views.reporte_documentos_importados_view, name='reporte_documentos_importados'),
     path('reportes/movimientos-documento/', views.reporte_movimientos_documento_view, name='reporte_movimientos_documento'),
 ]

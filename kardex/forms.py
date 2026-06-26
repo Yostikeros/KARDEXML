@@ -374,6 +374,27 @@ class ProcesoTrilladoForm(forms.Form):
             attrs={'class': 'form-control', 'type': 'date'},
         ),
     )
+    lote = forms.CharField(
+        label='Lote',
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    factura_relacionada = forms.CharField(
+        label='Factura relacionada',
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'FAC-2026-00001'}),
+    )
+    fecha_factura_relacionada = forms.DateField(
+        label='Fecha factura',
+        input_formats=['%Y-%m-%d', '%d/%m/%Y'],
+        required=False,
+        widget=forms.DateInput(
+            format='%Y-%m-%d',
+            attrs={'class': 'form-control', 'type': 'date'},
+        ),
+    )
     producto_consumido = forms.ModelChoiceField(
         queryset=Producto.objects.filter(activo=True, controla_stock=True, afecta_kardex=True).order_by('nombre'),
         label='Cafe pergamino consumido',
@@ -395,13 +416,13 @@ class ProcesoTrilladoForm(forms.Form):
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
     )
     tipo_cambio_fecha_proceso = forms.DecimalField(
-        label='Tipo de cambio fecha proceso',
+        label='TC fecha proceso',
         max_digits=12,
         decimal_places=6,
         min_value=Decimal('0.000001'),
         required=False,
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
-        help_text='Si lo dejas vacio, se intentara usar el tipo de cambio SUNAT venta registrado para la fecha.',
+        widget=forms.HiddenInput(),
+        help_text='Automatico segun la fecha del proceso.',
     )
     producto_exportable = forms.ModelChoiceField(
         queryset=Producto.objects.filter(activo=True, controla_stock=True, afecta_kardex=True).order_by('nombre'),
@@ -429,7 +450,9 @@ class ProcesoTrilladoForm(forms.Form):
         widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, tipo_cambio_proceso=None, fecha_proceso=None, **kwargs):
+        self.tipo_cambio_proceso = tipo_cambio_proceso
+        self.fecha_proceso = fecha_proceso
         super().__init__(*args, **kwargs)
         subproductos = Producto.objects.filter(
             activo=True,
@@ -452,7 +475,7 @@ class ProcesoTrilladoForm(forms.Form):
                 widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
             )
             self.fields[f'valor_mercado_subproducto_{index}'] = forms.DecimalField(
-                label='Valor mercado unitario',
+                label='Valor mercado USD',
                 max_digits=18,
                 decimal_places=6,
                 min_value=Decimal('0'),
@@ -463,15 +486,18 @@ class ProcesoTrilladoForm(forms.Form):
     def clean(self):
         cleaned_data = super().clean()
         fecha = cleaned_data.get('fecha')
-        tipo_cambio = cleaned_data.get('tipo_cambio_fecha_proceso')
-        if fecha and not tipo_cambio:
+        tipo_cambio = None
+        if fecha and self.fecha_proceso and fecha == self.fecha_proceso and self.tipo_cambio_proceso:
+            tipo_cambio = self.tipo_cambio_proceso
+            cleaned_data['tipo_cambio_fecha_proceso'] = tipo_cambio
+        elif fecha:
             tipo_cambio = _tipo_cambio_sunat_venta(fecha)
             if tipo_cambio:
                 cleaned_data['tipo_cambio_fecha_proceso'] = tipo_cambio
         if fecha and not cleaned_data.get('tipo_cambio_fecha_proceso'):
             self.add_error(
                 'tipo_cambio_fecha_proceso',
-                'Registra el tipo de cambio para la fecha del proceso o ingresalo manualmente.',
+                'Registra el tipo de cambio SUNAT para la fecha del proceso.',
             )
 
         cantidad_consumida = cleaned_data.get('cantidad_consumida') or Decimal('0')
@@ -490,7 +516,7 @@ class ProcesoTrilladoForm(forms.Form):
                 if cantidad is None:
                     self.add_error(f'cantidad_subproducto_{index}', 'Ingresa la cantidad.')
                 if valor is None:
-                    self.add_error(f'valor_mercado_subproducto_{index}', 'Ingresa el valor de mercado.')
+                    self.add_error(f'valor_mercado_subproducto_{index}', 'Ingresa el valor de mercado en USD.')
             if producto and cantidad:
                 cantidad_subproductos += cantidad
                 productos.append(producto.id)

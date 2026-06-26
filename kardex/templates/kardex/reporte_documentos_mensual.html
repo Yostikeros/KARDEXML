@@ -1,0 +1,111 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h1 class="h3 mb-0">Documentos por mes</h1>
+        <div class="text-secondary small">Cantidad de facturas, liquidaciones y totales por mes.</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'kardex:reportes_index' %}">Reportes</a>
+</div>
+
+<form class="card mb-3" method="get">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="fecha_desde">Fecha desde</label>
+                <input class="form-control" id="fecha_desde" name="fecha_desde" type="date" value="{{ fecha_desde }}">
+            </div>
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="fecha_hasta">Fecha hasta</label>
+                <input class="form-control" id="fecha_hasta" name="fecha_hasta" type="date" value="{{ fecha_hasta }}">
+            </div>
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="tipo_operacion">Tipo de operacion</label>
+                <select class="form-select" id="tipo_operacion" name="tipo_operacion">
+                    <option value="">Todos</option>
+                    {% for value, label in tipos_operacion %}
+                        <option value="{{ value }}" {% if tipo_operacion == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="tipo_documento">Tipo de documento</label>
+                <select class="form-select" id="tipo_documento" name="tipo_documento">
+                    <option value="">Todos</option>
+                    {% for value, label in tipos_documento %}
+                        <option value="{{ value }}" {% if tipo_documento == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6 col-xl-2">
+                <label class="form-label" for="entidad">Entidad</label>
+                <select class="form-select" id="entidad" name="entidad">
+                    <option value="">Todas</option>
+                    {% for entidad in entidades %}
+                        <option value="{{ entidad.id }}" {% if entidad_id == entidad.id|stringformat:"s" %}selected{% endif %}>{{ entidad }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-3 col-xl-2">
+                <label class="form-label" for="estado">Estado</label>
+                <select class="form-select" id="estado" name="estado">
+                    <option value="">Todos excepto anulados</option>
+                    {% for value, label in estados %}
+                        <option value="{{ value }}" {% if estado == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+                <button class="btn btn-primary" type="submit">Filtrar</button>
+                <button class="btn btn-outline-success" type="submit" name="export" value="excel">Exportar Excel</button>
+                <a class="btn btn-outline-secondary" href="{% url 'kardex:reporte_documentos_mensual' %}">Limpiar</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="card">
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead>
+            <tr>
+                <th>Anio</th>
+                <th>Mes</th>
+                <th class="text-end">Facturas venta</th>
+                <th class="text-end">Facturas compra</th>
+                <th class="text-end">Liquidaciones compra</th>
+                <th class="text-end">Total docs.</th>
+                <th class="text-end">Total ventas</th>
+                <th class="text-end">Total compras</th>
+                <th class="text-end">Total liquidaciones</th>
+                <th class="text-end">Total general</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in items %}
+                <tr>
+                    <td>{{ item.anio }}</td>
+                    <td>{{ item.mes_nombre }}</td>
+                    <td class="text-end">{{ item.facturas_venta }}</td>
+                    <td class="text-end">{{ item.facturas_compra }}</td>
+                    <td class="text-end">{{ item.liquidaciones_compra }}</td>
+                    <td class="text-end fw-semibold">{{ item.total_documentos }}</td>
+                    <td class="text-end">{{ item.total_ventas|numero }}</td>
+                    <td class="text-end">{{ item.total_compras|numero }}</td>
+                    <td class="text-end">{{ item.total_liquidaciones|numero }}</td>
+                    <td class="text-end fw-semibold">{{ item.total_general|numero }}</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-primary" href="{% url 'kardex:reporte_documentos_mensual_detalle' item.anio item.mes %}{% if item.detalle_query %}?{{ item.detalle_query }}{% endif %}">Detalle</a>
+                    </td>
+                </tr>
+            {% empty %}
+                <tr><td colspan="11" class="text-secondary">No hay documentos para el filtro seleccionado.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

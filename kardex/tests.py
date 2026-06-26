@@ -28,13 +28,14 @@ from .services.dashboard import obtener_analisis_compras_ventas
 from .services.kardex import (
     KardexError,
     confirmar_documento_kardex,
+    devolver_documento_a_pendiente,
     editar_stock_inicial,
     registrar_stock_inicial,
     revertir_aprobacion_kardex,
     revertir_pre_kardex,
 )
 from .services.procesos import anular_proceso_trillado, confirmar_proceso_trillado, crear_proceso_trillado
-from .services.reportes import obtener_stock_actual
+from .services.reportes import obtener_documentos_mensual, obtener_stock_actual
 from .templatetags.kardex_format import fecha_corta, numero
 from .services.xml_importer import XMLImportError, importar_xml
 
@@ -229,6 +230,62 @@ class XMLImporterTests(TestCase):
         self.assertEqual(detalle.subtotal, Decimal('370.000'))
         self.assertEqual(detalle.igv, Decimal('66.600'))
 
+    def test_importa_lbr_corrige_equivalencia_con_factor_uno(self):
+        producto = Producto.objects.create(
+            codigo_interno='CAFX',
+            nombre='Cafe exportable',
+            tipo_producto=Producto.PRODUCTO_TERMINADO,
+        )
+        ProductoEquivalencia.objects.create(
+            codigo_producto_xml='CAF-001',
+            descripcion_xml='Cafe pergamino',
+            unidad_medida_xml='LBR',
+            producto=producto,
+            factor_conversion=Decimal('1'),
+        )
+        TipoCambioSunat.objects.create(
+            mes='junio',
+            anio=2026,
+            dia=24,
+            compra='3.600000',
+            venta='3.700000',
+        )
+
+        result = importar_xml(VENTA_USD_LBR_XML, filename='venta-usd-lbr.xml')
+
+        detalle = result.documento.detalles.first()
+        self.assertEqual(detalle.producto, producto)
+        self.assertEqual(detalle.factor_conversion, Decimal('0.453592'))
+        self.assertEqual(detalle.cantidad_base.quantize(Decimal('0.01')), Decimal('19664.78'))
+
+    def test_clasificar_lbr_aplica_conversion_a_kg(self):
+        TipoCambioSunat.objects.create(
+            mes='junio',
+            anio=2026,
+            dia=24,
+            compra='3.600000',
+            venta='3.700000',
+        )
+        result = importar_xml(VENTA_USD_LBR_XML, filename='venta-usd-lbr.xml')
+        detalle = result.documento.detalles.first()
+        producto = Producto.objects.create(
+            codigo_interno='CAFX',
+            nombre='Cafe exportable',
+            tipo_producto=Producto.PRODUCTO_TERMINADO,
+        )
+
+        clasificar_detalle(detalle, producto, '1', guardar_equivalencia=True)
+
+        detalle.refresh_from_db()
+        equivalencia = ProductoEquivalencia.objects.get(
+            codigo_producto_xml='CAF-001',
+            descripcion_xml='Cafe pergamino',
+            unidad_medida_xml='LBR',
+        )
+        self.assertEqual(detalle.factor_conversion, Decimal('0.453592'))
+        self.assertEqual(detalle.cantidad_base.quantize(Decimal('0.01')), Decimal('19664.78'))
+        self.assertEqual(equivalencia.factor_conversion, Decimal('0.453592'))
+
     def test_comprobante_usd_lbr_muestra_moneda_y_unidad_operativa(self):
         TipoCambioSunat.objects.create(
             mes='junio',
@@ -292,6 +349,53 @@ class XMLImporterTests(TestCase):
         self.assertEqual(detalle.unidad_medida_xml, 'KG')
         self.assertEqual(detalle.cantidad, Decimal('19665'))
         self.assertEqual(detalle.cantidad_base, Decimal('19665.000000'))
+
+    def test_importa_niu_quintales_46kg_como_kg(self):
+        xml = VENTA_USD_LBR_XML.replace(
+            b'<cbc:InvoicedQuantity unitCode="LBR" unitCodeListAgencyName="United Nations Economic Commission for Europe" unitCodeListID="UN/ECE rec 20">43353.459</cbc:InvoicedQuantity>',
+            b'<cbc:InvoicedQuantity unitCode="NIU">434.782609</cbc:InvoicedQuantity>',
+        ).replace(
+            b'<cbc:Description>Cafe pergamino</cbc:Description>',
+            b'<cbc:Description>QQ/46 KG VENTA DE CAFE DESCARTE</cbc:Description>',
+        )
+        TipoCambioSunat.objects.create(
+            mes='junio',
+            anio=2026,
+            dia=24,
+            compra='3.600000',
+            venta='3.700000',
+        )
+
+        result = importar_xml(xml, filename='venta-qq-46kg.xml')
+
+        detalle = result.documento.detalles.first()
+        self.assertEqual(detalle.unidad_medida_xml, 'KG')
+        self.assertEqual(detalle.cantidad, Decimal('20000.000000'))
+        self.assertEqual(detalle.cantidad_base, Decimal('20000.000000'))
+
+    def test_clasificar_niu_quintales_46kg_aplica_factor(self):
+        result = importar_xml(FACTURA_XML, filename='factura.xml')
+        detalle = result.documento.detalles.first()
+        detalle.descripcion_xml = 'QQ/46 KG VENTA DE CAFE DESCARTE'
+        detalle.unidad_medida_xml = 'NIU'
+        detalle.cantidad = Decimal('434.782609')
+        detalle.save(update_fields=['descripcion_xml', 'unidad_medida_xml', 'cantidad'])
+        producto = Producto.objects.create(
+            codigo_interno='CASU',
+            nombre='Cafe subproductos',
+            tipo_producto=Producto.SUBPRODUCTO,
+        )
+
+        clasificar_detalle(detalle, producto, '1', guardar_equivalencia=True)
+
+        detalle.refresh_from_db()
+        equivalencia = ProductoEquivalencia.objects.get(
+            descripcion_xml='QQ/46 KG VENTA DE CAFE DESCARTE',
+            unidad_medida_xml='NIU',
+        )
+        self.assertEqual(detalle.factor_conversion, Decimal('46'))
+        self.assertEqual(detalle.cantidad_base, Decimal('20000.000000'))
+        self.assertEqual(equivalencia.factor_conversion, Decimal('46'))
 
     def test_importa_usd_requiere_tipo_cambio_sunat(self):
         with self.assertRaises(XMLImportError):
@@ -705,6 +809,42 @@ class XMLImporterTests(TestCase):
         with self.assertRaises(KardexError):
             confirmar_documento_kardex(result.documento)
 
+    def test_confirma_documento_historico_y_recalcula_movimientos_posteriores(self):
+        result = importar_xml(FACTURA_XML, filename='factura.xml')
+        producto = Producto.objects.create(
+            codigo_interno='MP-POST',
+            nombre='Cafe con movimiento posterior',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        clasificar_detalle(
+            detalle=result.documento.detalles.first(),
+            producto=producto,
+            factor_conversion='1',
+            guardar_equivalencia=False,
+        )
+        posterior = MovimientoKardex.objects.create(
+            fecha=date(2026, 6, 25),
+            producto=producto,
+            tipo_movimiento=MovimientoKardex.AJUSTE_ENTRADA,
+            cantidad_entrada=Decimal('1'),
+            costo_unitario_entrada=Decimal('10'),
+            costo_total_entrada=Decimal('10'),
+            stock_cantidad=Decimal('1'),
+            stock_costo_unitario_promedio=Decimal('10'),
+            stock_costo_total=Decimal('10'),
+        )
+
+        movimientos = confirmar_documento_kardex(result.documento)
+
+        result.documento.refresh_from_db()
+        posterior.refresh_from_db()
+        self.assertEqual(result.documento.estado, Documento.CONFIRMADO)
+        self.assertEqual(len(movimientos), 1)
+        self.assertEqual(movimientos[0].stock_cantidad, Decimal('10.000000'))
+        self.assertEqual(movimientos[0].stock_costo_total, Decimal('100.00'))
+        self.assertEqual(posterior.stock_cantidad, Decimal('11.000000'))
+        self.assertEqual(posterior.stock_costo_total, Decimal('110.00'))
+
     def test_revierte_pre_kardex_a_pendiente_y_limpia_detalles(self):
         result = importar_xml(FACTURA_XML, filename='factura.xml')
         producto = Producto.objects.create(
@@ -724,6 +864,80 @@ class XMLImporterTests(TestCase):
         self.assertIsNone(detalle.producto)
         self.assertFalse(detalle.afecta_kardex)
         self.assertEqual(detalle.cantidad_base, 0)
+
+    def test_devuelve_documento_pre_kardex_a_pendiente(self):
+        result = importar_xml(FACTURA_XML, filename='factura.xml')
+        producto = Producto.objects.create(
+            codigo_interno='MP-DEV-PRE',
+            nombre='Cafe devuelve pendiente',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        detalle = result.documento.detalles.first()
+        clasificar_detalle(detalle, producto, '1', guardar_equivalencia=False)
+
+        devolver_documento_a_pendiente(result.documento)
+
+        result.documento.refresh_from_db()
+        detalle.refresh_from_db()
+        self.assertEqual(result.documento.estado, Documento.PENDIENTE_CLASIFICACION)
+        self.assertIsNone(detalle.producto)
+        self.assertEqual(detalle.estado_clasificacion, DocumentoDetalle.PENDIENTE)
+
+    def test_devuelve_documento_confirmado_a_pendiente_y_recalcula_posteriores(self):
+        result = importar_xml(FACTURA_XML, filename='factura.xml')
+        producto = Producto.objects.create(
+            codigo_interno='MP-DEV-CONF',
+            nombre='Cafe confirmado devuelve pendiente',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        detalle = result.documento.detalles.first()
+        clasificar_detalle(detalle, producto, '1', guardar_equivalencia=False)
+        confirmar_documento_kardex(result.documento)
+        posterior = MovimientoKardex.objects.create(
+            fecha=date(2026, 6, 25),
+            producto=producto,
+            tipo_movimiento=MovimientoKardex.AJUSTE_ENTRADA,
+            cantidad_entrada=Decimal('1'),
+            costo_unitario_entrada=Decimal('10'),
+            costo_total_entrada=Decimal('10'),
+            stock_cantidad=Decimal('11'),
+            stock_costo_unitario_promedio=Decimal('10'),
+            stock_costo_total=Decimal('110'),
+        )
+
+        devolver_documento_a_pendiente(result.documento)
+
+        result.documento.refresh_from_db()
+        detalle.refresh_from_db()
+        posterior.refresh_from_db()
+        self.assertEqual(result.documento.estado, Documento.PENDIENTE_CLASIFICACION)
+        self.assertFalse(MovimientoKardex.objects.filter(documento_origen=result.documento).exists())
+        self.assertIsNone(detalle.producto)
+        self.assertEqual(detalle.estado_clasificacion, DocumentoDetalle.PENDIENTE)
+        self.assertEqual(posterior.stock_cantidad, Decimal('1.000000'))
+        self.assertEqual(posterior.stock_costo_total, Decimal('10.00'))
+
+    def test_boton_devuelve_documento_a_pendiente(self):
+        result = importar_xml(FACTURA_XML, filename='factura.xml')
+        producto = Producto.objects.create(
+            codigo_interno='MP-DEV-BTN',
+            nombre='Cafe boton devuelve pendiente',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        clasificar_detalle(
+            detalle=result.documento.detalles.first(),
+            producto=producto,
+            factor_conversion='1',
+            guardar_equivalencia=False,
+        )
+        user = User.objects.create_user(username='devolver-pendiente', password='admin12345')
+        self.client.force_login(user)
+
+        response = self.client.post(reverse('kardex:devolver_documento_pendiente', args=[result.documento.id]))
+
+        self.assertRedirects(response, reverse('kardex:clasificar_documento', args=[result.documento.id]))
+        result.documento.refresh_from_db()
+        self.assertEqual(result.documento.estado, Documento.PENDIENTE_CLASIFICACION)
 
     def test_quita_documento_de_pre_kardex_desde_bandeja_sin_eliminar_xml(self):
         result = importar_xml(FACTURA_XML, filename='factura.xml')
@@ -826,6 +1040,7 @@ class XMLImporterTests(TestCase):
         self.assertEqual(item.cantidad, 10)
         self.assertEqual(item.costo_promedio, 10)
         self.assertEqual(item.costo_total, 100)
+        self.assertEqual(item.ultimo_movimiento.documento_origen, result.documento)
 
     def test_paginas_de_reportes_cargan(self):
         user = User.objects.create_user(username='admin', password='admin12345')
@@ -836,6 +1051,8 @@ class XMLImporterTests(TestCase):
             reverse('kardex:reporte_stock_actual'),
             reverse('kardex:reporte_kardex_producto'),
             reverse('kardex:reporte_kardex_sunat_producto'),
+            reverse('kardex:reporte_documentos_mensual'),
+            reverse('kardex:reporte_documentos_mensual_detalle', args=[2026, 6]),
             reverse('kardex:reporte_documentos_importados'),
             reverse('kardex:reporte_movimientos_documento'),
         ]
@@ -850,6 +1067,8 @@ class XMLImporterTests(TestCase):
         urls = [
             reverse('kardex:reporte_stock_actual'),
             reverse('kardex:reporte_kardex_producto'),
+            reverse('kardex:reporte_documentos_mensual'),
+            reverse('kardex:reporte_documentos_mensual_detalle', args=[2026, 6]),
             reverse('kardex:reporte_documentos_importados'),
             reverse('kardex:reporte_movimientos_documento'),
         ]
@@ -861,6 +1080,181 @@ class XMLImporterTests(TestCase):
                 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             )
             self.assertTrue(response.content.startswith(b'PK'))
+
+    def test_reporte_documentos_mensual_resume_cantidades_y_excluye_anulados(self):
+        empresa = Entidad.objects.create(numero_documento='20999999999', razon_social='Empresa Principal SAC')
+        proveedor = Entidad.objects.create(numero_documento='20111111111', razon_social='Proveedor SAC', es_proveedor=True)
+        cliente = Entidad.objects.create(numero_documento='20222222222', razon_social='Cliente SAC', es_cliente=True)
+        productor = Entidad.objects.create(numero_documento='20333333333', razon_social='Productor SAC', es_proveedor=True)
+
+        venta = Documento.objects.create(
+            tipo_documento=Documento.FACTURA,
+            serie='F001',
+            numero='1',
+            fecha_emision=date(2026, 6, 10),
+            entidad_emisor=empresa,
+            entidad_receptor=cliente,
+            cliente=cliente,
+            tipo_operacion=Documento.VENTA,
+            moneda='PEN',
+            total=Decimal('118.00'),
+            xml_hash='venta-mensual',
+        )
+        compra = Documento.objects.create(
+            tipo_documento=Documento.FACTURA,
+            serie='E001',
+            numero='2',
+            fecha_emision=date(2026, 6, 11),
+            entidad_emisor=proveedor,
+            entidad_receptor=empresa,
+            proveedor=proveedor,
+            tipo_operacion=Documento.COMPRA,
+            moneda='PEN',
+            total=Decimal('236.00'),
+            xml_hash='compra-mensual',
+        )
+        liquidacion = Documento.objects.create(
+            tipo_documento=Documento.LIQUIDACION_COMPRA,
+            serie='L001',
+            numero='3',
+            fecha_emision=date(2026, 6, 12),
+            entidad_emisor=empresa,
+            entidad_receptor=productor,
+            proveedor=productor,
+            tipo_operacion=Documento.OTRO,
+            moneda='PEN',
+            total=Decimal('354.00'),
+            xml_hash='liquidacion-mensual',
+        )
+        Documento.objects.create(
+            tipo_documento=Documento.FACTURA,
+            serie='F001',
+            numero='4',
+            fecha_emision=date(2026, 6, 13),
+            entidad_emisor=empresa,
+            entidad_receptor=cliente,
+            cliente=cliente,
+            tipo_operacion=Documento.VENTA,
+            moneda='PEN',
+            total=Decimal('999.00'),
+            xml_hash='venta-anulada-mensual',
+            estado=Documento.ANULADO,
+        )
+        for documento, subtotal, igv in [
+            (venta, '100.00', '18.00'),
+            (compra, '200.00', '36.00'),
+            (liquidacion, '300.00', '54.00'),
+        ]:
+            DocumentoDetalle.objects.create(
+                documento=documento,
+                descripcion_xml='Cafe',
+                unidad_medida_xml='KG',
+                cantidad=Decimal('1'),
+                subtotal=Decimal(subtotal),
+                igv=Decimal(igv),
+                total=documento.total,
+            )
+
+        items = obtener_documentos_mensual(fecha_desde=date(2026, 6, 1), fecha_hasta=date(2026, 6, 30))
+        item = items[0]
+
+        self.assertEqual(item.facturas_venta, 1)
+        self.assertEqual(item.facturas_compra, 1)
+        self.assertEqual(item.liquidaciones_compra, 1)
+        self.assertEqual(item.total_documentos, 3)
+        self.assertEqual(item.total_ventas, Decimal('118.00'))
+        self.assertEqual(item.total_compras, Decimal('236.00'))
+        self.assertEqual(item.total_liquidaciones, Decimal('354.00'))
+        self.assertEqual(item.total_general, Decimal('708.00'))
+
+        user = User.objects.create_user(username='docs-mensual', password='admin12345')
+        self.client.force_login(user)
+        response = self.client.get(
+            reverse('kardex:reporte_documentos_mensual'),
+            {'fecha_desde': '2026-06-01', 'fecha_hasta': '2026-06-30'},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Documentos por mes')
+        self.assertContains(response, '708.00')
+
+    def test_reporte_movimientos_documento_filtra_por_tipo_fecha_y_moneda(self):
+        empresa = Entidad.objects.create(numero_documento='20999999999', razon_social='Empresa Principal SAC')
+        proveedor = Entidad.objects.create(numero_documento='20111111111', razon_social='Proveedor SAC', es_proveedor=True)
+        productor = Entidad.objects.create(numero_documento='20333333333', razon_social='Productor SAC', es_proveedor=True)
+        producto = Producto.objects.create(
+            codigo_interno='MP-REP-MOV',
+            nombre='Cafe reporte movimientos',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        factura = Documento.objects.create(
+            tipo_documento=Documento.FACTURA,
+            serie='E001',
+            numero='10',
+            fecha_emision=date(2026, 6, 10),
+            entidad_emisor=proveedor,
+            entidad_receptor=empresa,
+            proveedor=proveedor,
+            tipo_operacion=Documento.COMPRA,
+            moneda='PEN',
+            total=Decimal('100.00'),
+            xml_hash='mov-factura',
+        )
+        liquidacion = Documento.objects.create(
+            tipo_documento=Documento.LIQUIDACION_COMPRA,
+            serie='L001',
+            numero='20',
+            fecha_emision=date(2026, 6, 11),
+            entidad_emisor=empresa,
+            entidad_receptor=productor,
+            proveedor=productor,
+            tipo_operacion=Documento.OTRO,
+            moneda='USD',
+            total=Decimal('200.00'),
+            xml_hash='mov-liquidacion',
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 6, 10),
+            producto=producto,
+            documento_origen=factura,
+            entidad=proveedor,
+            tipo_movimiento=MovimientoKardex.ENTRADA,
+            cantidad_entrada=Decimal('10'),
+            costo_total_entrada=Decimal('100'),
+            stock_cantidad=Decimal('10'),
+            stock_costo_total=Decimal('100'),
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 6, 11),
+            producto=producto,
+            documento_origen=liquidacion,
+            entidad=productor,
+            tipo_movimiento=MovimientoKardex.ENTRADA,
+            cantidad_entrada=Decimal('20'),
+            costo_total_entrada=Decimal('200'),
+            stock_cantidad=Decimal('30'),
+            stock_costo_total=Decimal('300'),
+        )
+        user = User.objects.create_user(username='mov-doc-filtros', password='admin12345')
+        self.client.force_login(user)
+
+        response = self.client.get(
+            reverse('kardex:reporte_movimientos_documento'),
+            {
+                'fecha_desde': '2026-06-10',
+                'fecha_hasta': '2026-06-10',
+                'tipo_documento': Documento.FACTURA,
+                'moneda': 'PEN',
+                'sort': 'producto',
+                'order': 'desc',
+            },
+        )
+        movimientos = list(response.context['movimientos'])
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(movimientos, [MovimientoKardex.objects.get(documento_origen=factura)])
+        self.assertContains(response, 'Tipo doc.')
+        self.assertContains(response, 'Factura')
 
     def test_reporte_kardex_sunat_producto_muestra_formato_13_1(self):
         result = importar_xml(FACTURA_XML, filename='factura.xml')
@@ -1444,6 +1838,64 @@ class ProcesoTrilladoTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['tipo_cambio_fecha_proceso'], Decimal('3.700000'))
 
+    def test_formulario_trillado_ignora_tipo_cambio_manual_y_usa_fecha(self):
+        form = ProcesoTrilladoForm(
+            data={
+                'fecha': '2026-06-26',
+                'producto_consumido': self.pergamino.id,
+                'cantidad_consumida': '1000',
+                'costo_proceso_usd': '100',
+                'tipo_cambio_fecha_proceso': '9.999999',
+                'producto_exportable': self.exportable.id,
+                'cantidad_exportable': '760',
+                'merma': '60',
+                'subproducto_1': self.subproducto.id,
+                'cantidad_subproducto_1': '180',
+                'valor_mercado_subproducto_1': '1.5',
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['tipo_cambio_fecha_proceso'], Decimal('3.700000'))
+
+    def test_guardar_borrador_trillado_calcula_resumen_valorizado(self):
+        proceso = crear_proceso_trillado(
+            {
+                'fecha': date(2026, 6, 26),
+                'lote': 'L-001',
+                'factura_relacionada': 'FAC-EXT-001',
+                'fecha_factura_relacionada': date(2026, 6, 27),
+                'producto_consumido': self.pergamino,
+                'cantidad_consumida': Decimal('1000'),
+                'costo_proceso_usd': Decimal('100'),
+                'tipo_cambio_fecha_proceso': Decimal('3.700000'),
+                'producto_exportable': self.exportable,
+                'cantidad_exportable': Decimal('760'),
+                'merma': Decimal('60'),
+                'subproducto_1': self.subproducto,
+                'cantidad_subproducto_1': Decimal('180'),
+                'valor_mercado_subproducto_1': Decimal('1.5'),
+            },
+            user=self.user,
+        )
+
+        proceso.refresh_from_db()
+        exportable = proceso.productos_obtenidos.get(es_principal=True)
+        subproducto = proceso.productos_obtenidos.get(es_principal=False)
+        self.assertEqual(proceso.estado, ProcesoProductivo.BORRADOR)
+        self.assertTrue(proceso.codigo_proceso.startswith('TRI-2026-'))
+        self.assertEqual(proceso.lote, 'L-001')
+        self.assertEqual(proceso.factura_relacionada, 'FAC-EXT-001')
+        self.assertEqual(proceso.fecha_factura_relacionada, date(2026, 6, 27))
+        self.assertEqual(proceso.costo_pergamino_consumido, Decimal('10000.00'))
+        self.assertEqual(proceso.costo_proceso_soles, Decimal('370.00'))
+        self.assertEqual(proceso.costo_total_proceso, Decimal('10370.00'))
+        self.assertEqual(proceso.costo_exportable, Decimal('9371.00'))
+        self.assertEqual(proceso.costo_unitario_exportable, Decimal('12.330263'))
+        self.assertEqual(exportable.costo_asignado, Decimal('9371.00'))
+        self.assertEqual(subproducto.valor_mercado_unitario_soles, Decimal('5.550000'))
+        self.assertEqual(subproducto.costo_asignado, Decimal('999.00'))
+
     def test_confirmar_trillado_genera_movimientos_y_congela_costos(self):
         data = {
             'fecha': date(2026, 6, 26),
@@ -1467,8 +1919,8 @@ class ProcesoTrilladoTests(TestCase):
         self.assertEqual(proceso.costo_pergamino_consumido, Decimal('10000.00'))
         self.assertEqual(proceso.costo_proceso_soles, Decimal('370.00'))
         self.assertEqual(proceso.costo_total_proceso, Decimal('10370.00'))
-        self.assertEqual(proceso.costo_exportable, Decimal('10100.00'))
-        self.assertEqual(proceso.costo_unitario_exportable, Decimal('13.289474'))
+        self.assertEqual(proceso.costo_exportable, Decimal('9371.00'))
+        self.assertEqual(proceso.costo_unitario_exportable, Decimal('12.330263'))
         self.assertEqual(proceso.tipo_cambio_fecha_proceso, Decimal('3.700000'))
 
         movimientos = list(MovimientoKardex.objects.filter(proceso_origen=proceso).order_by('id'))
@@ -1478,13 +1930,54 @@ class ProcesoTrilladoTests(TestCase):
         self.assertEqual(movimientos[0].costo_total_salida, Decimal('10000.00'))
         self.assertEqual(movimientos[1].tipo_movimiento, MovimientoKardex.PROCESO_ENTRADA)
         self.assertEqual(movimientos[1].producto, self.exportable)
-        self.assertEqual(movimientos[1].costo_total_entrada, Decimal('10100.00'))
+        self.assertEqual(movimientos[1].costo_total_entrada, Decimal('9371.00'))
         self.assertEqual(movimientos[2].producto, self.subproducto)
-        self.assertEqual(movimientos[2].costo_total_entrada, Decimal('270.00'))
+        self.assertEqual(movimientos[2].costo_total_entrada, Decimal('999.00'))
 
         TipoCambioSunat.objects.filter(anio=2026, mes='junio', dia=26).update(venta=Decimal('4.000000'))
         proceso.refresh_from_db()
         self.assertEqual(proceso.tipo_cambio_fecha_proceso, Decimal('3.700000'))
+
+    def test_confirmar_trillado_historico_recalcula_movimientos_posteriores(self):
+        registrar_stock_inicial(
+            producto=self.exportable,
+            fecha=date(2026, 6, 1),
+            cantidad=Decimal('100'),
+            costo_unitario=Decimal('10'),
+            user=self.user,
+        )
+        venta_posterior = MovimientoKardex.objects.create(
+            fecha=date(2026, 6, 27),
+            producto=self.exportable,
+            tipo_movimiento=MovimientoKardex.SALIDA,
+            cantidad_salida=Decimal('50'),
+            costo_unitario_salida=Decimal('10'),
+            costo_total_salida=Decimal('500'),
+            stock_cantidad=Decimal('50'),
+            stock_costo_unitario_promedio=Decimal('10'),
+            stock_costo_total=Decimal('500'),
+        )
+        proceso = crear_proceso_trillado(
+            {
+                'fecha': date(2026, 6, 26),
+                'producto_consumido': self.pergamino,
+                'cantidad_consumida': Decimal('100'),
+                'costo_proceso_usd': Decimal('0'),
+                'tipo_cambio_fecha_proceso': Decimal('3.700000'),
+                'producto_exportable': self.exportable,
+                'cantidad_exportable': Decimal('40'),
+                'merma': Decimal('60'),
+            },
+            user=self.user,
+        )
+
+        confirmar_proceso_trillado(proceso, user=self.user)
+
+        venta_posterior.refresh_from_db()
+        self.assertEqual(venta_posterior.costo_unitario_salida, Decimal('14.285714'))
+        self.assertEqual(venta_posterior.costo_total_salida, Decimal('714.29'))
+        self.assertEqual(venta_posterior.stock_cantidad, Decimal('90.000000'))
+        self.assertEqual(venta_posterior.stock_costo_total, Decimal('1285.71'))
 
     def test_confirmar_trillado_bloquea_subproductos_mayores_al_costo_total(self):
         proceso = crear_proceso_trillado(

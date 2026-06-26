@@ -7,7 +7,14 @@ from decimal import Decimal, InvalidOperation
 from django.db import IntegrityError, transaction
 
 from kardex.services.tipo_cambio import obtener_tc_venta_sunat
-from kardex.services.unidades import inferir_cantidad_kg_descripcion, normalizar_unidad
+from kardex.services.unidades import (
+    FACTOR_LIBRA_A_KG,
+    inferir_cantidad_quintal_kg,
+    inferir_cantidad_kg_descripcion,
+    normalizar_unidad,
+    normalizar_cantidad_kg,
+    resolver_factor_conversion,
+)
 
 from kardex.models import (
     Auditoria,
@@ -322,7 +329,9 @@ def _parse_detalle(line):
     descripcion = _text(item_node, 'Description') or 'Producto sin descripcion'
     unidad = normalizar_unidad(_attr(quantity_node, 'unitCode') or 'NIU')
     cantidad = _decimal(_node_text(quantity_node) or '0')
-    cantidad_kg = inferir_cantidad_kg_descripcion(descripcion)
+    cantidad_kg = inferir_cantidad_quintal_kg(descripcion, cantidad)
+    if cantidad_kg is None:
+        cantidad_kg = inferir_cantidad_kg_descripcion(descripcion)
     if unidad in {'NIU', 'UND'} and cantidad_kg:
         unidad = 'KG'
         cantidad = cantidad_kg
@@ -404,7 +413,15 @@ def _crear_detalle(documento, item, entidad):
     equivalencia = _buscar_equivalencia(entidad, item)
     producto = equivalencia.producto if equivalencia else None
     factor = equivalencia.factor_conversion if equivalencia else _factor_unidad(item['unidad_medida_xml'], producto)
+    factor = resolver_factor_conversion(
+        item['unidad_medida_xml'],
+        producto.unidad_base if producto else 'KG',
+        factor,
+        item['descripcion_xml'],
+    )
     cantidad_base = item['cantidad'] * factor
+    if producto and producto.unidad_base == 'KG':
+        cantidad_base = normalizar_cantidad_kg(cantidad_base)
     afecta_kardex = bool(producto and producto.afecta_kardex)
     estado = DocumentoDetalle.CLASIFICADO if producto else DocumentoDetalle.PENDIENTE
     if producto and not producto.afecta_kardex:
@@ -448,7 +465,7 @@ def _factor_unidad(unidad_xml, producto):
     if conversion:
         return conversion.factor
     if unidad_xml == 'LBR' and unidad_destino == 'KG':
-        return Decimal('0.453592')
+        return FACTOR_LIBRA_A_KG
     return Decimal('1')
 
 
