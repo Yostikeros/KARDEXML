@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django import forms
 
@@ -19,6 +19,61 @@ MESES_POR_NUMERO = {
     11: 'noviembre',
     12: 'diciembre',
 }
+
+
+TRILLADO_PRODUCTO_ORIGEN_CODIGO = 'CAPS'
+TRILLADO_PRODUCTO_ORIGEN_NOMBRE = 'CAFE PERGAMINO CONVENCIONAL'
+
+
+class CommaDecimalField(forms.DecimalField):
+    def to_python(self, value):
+        if isinstance(value, str):
+            value = (
+                value.replace('USD', '')
+                .replace('usd', '')
+                .replace('S/', '')
+                .replace('$', '')
+                .replace(',', '')
+                .strip()
+            )
+        return super().to_python(value)
+
+
+def numeric_text_widget(step='0.000001', placeholder=None, currency=None):
+    attrs = {
+        'class': 'form-control',
+        'inputmode': 'decimal',
+        'data-decimal-input': 'true',
+        'step': step,
+    }
+    if placeholder:
+        attrs['placeholder'] = placeholder
+    if currency:
+        attrs['data-currency'] = currency
+    return forms.TextInput(attrs=attrs)
+
+
+def readonly_numeric_text_widget():
+    return forms.TextInput(attrs={'class': 'form-control text-end', 'readonly': 'readonly'})
+
+
+def decimal_initial_for_field(value, field):
+    if value in (None, '') or not isinstance(field, forms.DecimalField):
+        return value
+    decimal_places = getattr(field, 'decimal_places', None)
+    if decimal_places is None:
+        return value
+    return Decimal(str(value)).quantize(Decimal(1).scaleb(-decimal_places), rounding=ROUND_HALF_UP)
+
+
+def producto_origen_trillado_queryset():
+    return Producto.objects.filter(
+        codigo_interno=TRILLADO_PRODUCTO_ORIGEN_CODIGO,
+        nombre__iexact=TRILLADO_PRODUCTO_ORIGEN_NOMBRE,
+        activo=True,
+        controla_stock=True,
+        afecta_kardex=True,
+    )
 
 
 class ProductoForm(forms.ModelForm):
@@ -381,13 +436,19 @@ class ProcesoTrilladoForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-control'}),
     )
     factura_relacionada = forms.CharField(
-        label='Factura relacionada',
+        label='Factura de proceso',
         required=False,
         max_length=100,
-        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'FAC-2026-00001'}),
+        widget=forms.TextInput(attrs={'class': 'form-control'}),
+    )
+    factura_destino = forms.CharField(
+        label='Factura Nro.',
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'E001-1796'}),
     )
     fecha_factura_relacionada = forms.DateField(
-        label='Fecha factura',
+        label='Fecha',
         input_formats=['%Y-%m-%d', '%d/%m/%Y'],
         required=False,
         widget=forms.DateInput(
@@ -395,28 +456,92 @@ class ProcesoTrilladoForm(forms.Form):
             attrs={'class': 'form-control', 'type': 'date'},
         ),
     )
+    cliente_destino_entidad = forms.ModelChoiceField(
+        queryset=Entidad.objects.filter(activo=True).order_by('razon_social'),
+        label='Cliente',
+        required=False,
+        widget=forms.Select(attrs={'class': 'form-select'}),
+    )
+    contrato_destino = forms.CharField(
+        label='Contrato',
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'P81267.000'}),
+    )
+    valor_total_destino_usd = CommaDecimalField(
+        label='Valor total USD',
+        max_digits=24,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        widget=numeric_text_widget(step='0.01', placeholder='USD 133,863.31', currency='USD'),
+    )
+    tipo_cambio_destino = forms.DecimalField(
+        label='TC fecha',
+        max_digits=12,
+        decimal_places=6,
+        min_value=Decimal('0'),
+        required=False,
+        disabled=True,
+        widget=readonly_numeric_text_widget(),
+    )
+    valor_total_destino_soles = forms.DecimalField(
+        label='Valor en soles',
+        max_digits=24,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        disabled=True,
+        widget=readonly_numeric_text_widget(),
+    )
     producto_consumido = forms.ModelChoiceField(
-        queryset=Producto.objects.filter(activo=True, controla_stock=True, afecta_kardex=True).order_by('nombre'),
+        queryset=Producto.objects.none(),
         label='Cafe pergamino consumido',
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
-    cantidad_consumida = forms.DecimalField(
+    cantidad_consumida = CommaDecimalField(
         label='Cantidad pergamino KG',
-        max_digits=18,
+        max_digits=24,
         decimal_places=6,
         min_value=Decimal('0.000001'),
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+        widget=numeric_text_widget(),
     )
-    costo_proceso_usd = forms.DecimalField(
-        label='Costo de proceso USD',
-        max_digits=18,
+    kg_por_quintal = CommaDecimalField(
+        label='Kg por quintal',
+        max_digits=24,
+        decimal_places=6,
+        min_value=Decimal('0.000001'),
+        initial=Decimal('46'),
+        widget=numeric_text_widget(),
+    )
+    quintales_procesados = forms.DecimalField(
+        label='Quintales procesados',
+        max_digits=24,
         decimal_places=6,
         min_value=Decimal('0'),
-        initial=Decimal('0'),
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+        required=False,
+        disabled=True,
+        widget=readonly_numeric_text_widget(),
+    )
+    costo_servicio_por_quintal_usd = CommaDecimalField(
+        label='Costo servicio por quintal USD',
+        max_digits=24,
+        decimal_places=6,
+        min_value=Decimal('0'),
+        initial=Decimal('5'),
+        widget=numeric_text_widget(currency='USD'),
+    )
+    costo_proceso_usd = forms.DecimalField(
+        label='Costo total servicio USD',
+        max_digits=24,
+        decimal_places=6,
+        min_value=Decimal('0'),
+        required=False,
+        disabled=True,
+        widget=readonly_numeric_text_widget(),
     )
     tipo_cambio_fecha_proceso = forms.DecimalField(
-        label='TC fecha proceso',
+        label='Tipo de cambio del proceso',
         max_digits=12,
         decimal_places=6,
         min_value=Decimal('0.000001'),
@@ -424,25 +549,59 @@ class ProcesoTrilladoForm(forms.Form):
         widget=forms.HiddenInput(),
         help_text='Automatico segun la fecha del proceso.',
     )
+    costo_proceso_soles = forms.DecimalField(
+        label='Costo total servicio S/',
+        max_digits=24,
+        decimal_places=2,
+        min_value=Decimal('0'),
+        required=False,
+        disabled=True,
+        widget=readonly_numeric_text_widget(),
+    )
+    costo_servicio_por_kg_usd = forms.DecimalField(
+        label='Costo servicio por kg USD',
+        max_digits=24,
+        decimal_places=6,
+        min_value=Decimal('0'),
+        required=False,
+        disabled=True,
+        widget=readonly_numeric_text_widget(),
+    )
+    costo_servicio_por_kg_soles = forms.DecimalField(
+        label='Costo servicio por kg S/',
+        max_digits=24,
+        decimal_places=6,
+        min_value=Decimal('0'),
+        required=False,
+        disabled=True,
+        widget=readonly_numeric_text_widget(),
+    )
     producto_exportable = forms.ModelChoiceField(
         queryset=Producto.objects.filter(activo=True, controla_stock=True, afecta_kardex=True).order_by('nombre'),
         label='Cafe exportable obtenido',
         widget=forms.Select(attrs={'class': 'form-select'}),
     )
-    cantidad_exportable = forms.DecimalField(
+    cantidad_exportable = CommaDecimalField(
         label='Cantidad exportable KG',
-        max_digits=18,
+        max_digits=24,
         decimal_places=6,
         min_value=Decimal('0.000001'),
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+        widget=numeric_text_widget(),
     )
-    merma = forms.DecimalField(
+    valor_mercado_exportable = CommaDecimalField(
+        label='Valor mercado USD',
+        max_digits=24,
+        decimal_places=6,
+        min_value=Decimal('0'),
+        widget=numeric_text_widget(currency='USD'),
+    )
+    merma = CommaDecimalField(
         label='Merma KG',
-        max_digits=18,
+        max_digits=24,
         decimal_places=6,
         min_value=Decimal('0'),
         initial=Decimal('0'),
-        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+        widget=numeric_text_widget(),
     )
     observaciones = forms.CharField(
         label='Observaciones',
@@ -450,10 +609,18 @@ class ProcesoTrilladoForm(forms.Form):
         widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
     )
 
-    def __init__(self, *args, tipo_cambio_proceso=None, fecha_proceso=None, **kwargs):
+    def __init__(self, *args, tipo_cambio_proceso=None, fecha_proceso=None, solo_detalles=False, **kwargs):
         self.tipo_cambio_proceso = tipo_cambio_proceso
         self.fecha_proceso = fecha_proceso
+        self.solo_detalles = solo_detalles
         super().__init__(*args, **kwargs)
+        producto_origen_queryset = producto_origen_trillado_queryset()
+        producto_origen = producto_origen_queryset.first()
+        self.fields['producto_consumido'].queryset = producto_origen_queryset
+        self.fields['producto_consumido'].disabled = True
+        if producto_origen:
+            self.fields['producto_consumido'].initial = producto_origen.pk
+            self.initial['producto_consumido'] = producto_origen.pk
         subproductos = Producto.objects.filter(
             activo=True,
             controla_stock=True,
@@ -466,22 +633,39 @@ class ProcesoTrilladoForm(forms.Form):
                 required=False,
                 widget=forms.Select(attrs={'class': 'form-select'}),
             )
-            self.fields[f'cantidad_subproducto_{index}'] = forms.DecimalField(
+            self.fields[f'cantidad_subproducto_{index}'] = CommaDecimalField(
                 label='Cantidad KG',
-                max_digits=18,
+                max_digits=24,
                 decimal_places=6,
                 min_value=Decimal('0.000001'),
                 required=False,
-                widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+                widget=numeric_text_widget(),
             )
-            self.fields[f'valor_mercado_subproducto_{index}'] = forms.DecimalField(
+            self.fields[f'valor_mercado_subproducto_{index}'] = CommaDecimalField(
                 label='Valor mercado USD',
-                max_digits=18,
+                max_digits=24,
                 decimal_places=6,
                 min_value=Decimal('0'),
                 required=False,
-                widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.000001'}),
+                widget=numeric_text_widget(currency='USD'),
             )
+        if self.solo_detalles:
+            campos_editables = {
+                'lote',
+                'factura_destino',
+                'fecha_factura_relacionada',
+                'cliente_destino_entidad',
+                'contrato_destino',
+                'factura_relacionada',
+                'valor_total_destino_usd',
+                'observaciones',
+            }
+            for nombre, campo in self.fields.items():
+                if nombre not in campos_editables:
+                    campo.disabled = True
+                    campo.required = False
+                    if nombre in self.initial:
+                        self.initial[nombre] = decimal_initial_for_field(self.initial[nombre], campo)
 
     def clean(self):
         cleaned_data = super().clean()
@@ -503,6 +687,55 @@ class ProcesoTrilladoForm(forms.Form):
         cantidad_consumida = cleaned_data.get('cantidad_consumida') or Decimal('0')
         cantidad_exportable = cleaned_data.get('cantidad_exportable') or Decimal('0')
         merma = cleaned_data.get('merma') or Decimal('0')
+        kg_por_quintal = cleaned_data.get('kg_por_quintal') or Decimal('0')
+        costo_servicio_por_quintal_usd = cleaned_data.get('costo_servicio_por_quintal_usd') or Decimal('0')
+        tipo_cambio_proceso = cleaned_data.get('tipo_cambio_fecha_proceso') or Decimal('0')
+        quintales = Decimal('0')
+        costo_total_servicio_usd = Decimal('0')
+        costo_total_servicio_soles = Decimal('0')
+        costo_servicio_por_kg_usd = Decimal('0')
+        costo_servicio_por_kg_soles = Decimal('0')
+        if cantidad_consumida and kg_por_quintal:
+            quintales = (cantidad_consumida / kg_por_quintal).quantize(Decimal('0.000001'), rounding=ROUND_HALF_UP)
+            costo_total_servicio_usd = (quintales * costo_servicio_por_quintal_usd).quantize(
+                Decimal('0.000001'),
+                rounding=ROUND_HALF_UP,
+            )
+            costo_total_servicio_soles = (costo_total_servicio_usd * tipo_cambio_proceso).quantize(
+                Decimal('0.01'),
+                rounding=ROUND_HALF_UP,
+            )
+            costo_servicio_por_kg_usd = (costo_total_servicio_usd / cantidad_consumida).quantize(
+                Decimal('0.000001'),
+                rounding=ROUND_HALF_UP,
+            )
+            costo_servicio_por_kg_soles = (costo_total_servicio_soles / cantidad_consumida).quantize(
+                Decimal('0.000001'),
+                rounding=ROUND_HALF_UP,
+            )
+        cleaned_data['quintales_procesados'] = quintales
+        cleaned_data['costo_proceso_usd'] = costo_total_servicio_usd
+        cleaned_data['costo_proceso_soles'] = costo_total_servicio_soles
+        cleaned_data['costo_servicio_por_kg_usd'] = costo_servicio_por_kg_usd
+        cleaned_data['costo_servicio_por_kg_soles'] = costo_servicio_por_kg_soles
+        fecha_destino = cleaned_data.get('fecha_factura_relacionada')
+        valor_destino_usd = cleaned_data.get('valor_total_destino_usd') or Decimal('0')
+        tipo_cambio_destino = None
+        if fecha_destino:
+            tipo_cambio_destino = _tipo_cambio_sunat_venta(fecha_destino)
+            if tipo_cambio_destino:
+                cleaned_data['tipo_cambio_destino'] = tipo_cambio_destino
+                cleaned_data['valor_total_destino_soles'] = (valor_destino_usd * tipo_cambio_destino).quantize(
+                    Decimal('0.01')
+                )
+            else:
+                self.add_error(
+                    'fecha_factura_relacionada',
+                    'Registra el tipo de cambio SUNAT para la fecha del destino.',
+                )
+        else:
+            cleaned_data['tipo_cambio_destino'] = Decimal('0')
+            cleaned_data['valor_total_destino_soles'] = Decimal('0')
         cantidad_subproductos = Decimal('0')
         productos = []
 
@@ -515,8 +748,6 @@ class ProcesoTrilladoForm(forms.Form):
                     self.add_error(f'subproducto_{index}', 'Selecciona el subproducto.')
                 if cantidad is None:
                     self.add_error(f'cantidad_subproducto_{index}', 'Ingresa la cantidad.')
-                if valor is None:
-                    self.add_error(f'valor_mercado_subproducto_{index}', 'Ingresa el valor de mercado en USD.')
             if producto and cantidad:
                 cantidad_subproductos += cantidad
                 productos.append(producto.id)

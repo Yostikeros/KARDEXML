@@ -127,7 +127,7 @@ Importante: restaurar una base reemplaza productos, entidades, documentos, movim
 - El admin de Django registra los modelos de la app `kardex`.
 - El boton del usuario en el sidebar lleva al admin cuando el usuario es administrador.
 - La pagina de stock inicial filtra saldos iniciales reales, sin mezclar movimientos de documentos.
-- La pantalla `Trillado` registra procesos internos de pergamino a exportable/subproductos como documento interno, con costo de proceso USD, tipo de cambio automatico por fecha, valorizacion residual y anulacion por reversion.
+- La pantalla `Trillado` registra procesos internos de pergamino a exportable/subproductos como documento interno, con costo de proceso USD, tipo de cambio automatico por fecha, valor de mercado para resultados obtenidos y anulacion por reversion.
 - Los documentos en Pre-Kardex o Confirmado pueden devolverse al estado inicial `Pendiente de clasificacion` desde el boton `Devolver a pendiente`; si estaban confirmados, se eliminan sus movimientos y se recalculan saldos posteriores.
 - El menu `Sistema > Mantenimiento DB` permite backup y restauracion de la base SQLite para usuarios administradores.
 - Los mensajes de error usan clases Bootstrap correctas mediante `MESSAGE_TAGS`.
@@ -321,24 +321,32 @@ Rutas:
 
 Flujo:
 
-1. Registrar un borrador de proceso con codigo autogenerado, fecha de proceso, lote opcional, factura externa relacionada opcional, cafe pergamino consumido, cantidad, costo de proceso USD y observaciones.
+1. Registrar un borrador de proceso con codigo autogenerado, fecha de proceso, lote opcional, destino comercial opcional, cafe pergamino consumido, cantidad, costo de proceso USD y observaciones.
 2. Registrar los resultados en una tabla editable: cafe exportable, subproductos dinamicos y merma.
 3. El tipo de cambio se toma automaticamente desde SUNAT para la fecha del proceso y se muestra como dato de lectura.
 4. Revisar balance fisico, resumen valorizado y rendimientos.
 5. Confirmar Kardex para generar movimientos historicos.
-6. Si se necesita corregir un proceso confirmado, anularlo y registrar un nuevo proceso.
+6. Si se necesita corregir cantidades, productos o costos de un proceso confirmado, anularlo y registrar un nuevo proceso.
 
-Mientras el proceso esta en borrador se puede editar. Si se cambia la fecha antes de confirmar, el sistema vuelve a tomar el tipo de cambio SUNAT venta registrado para la fecha del proceso. Una vez confirmado, el tipo de cambio queda guardado y no cambia automaticamente.
+Los datos generales incluyen codigo de proceso, lote y factura de proceso opcional. El destino comercial se registra en una tarjeta separada con factura Nro., fecha, cliente tomado de `Entidades`, contrato, valor USD, tipo de cambio de la fecha y valor equivalente en soles. El TC y el valor en soles del destino son calculados y quedan bloqueados en pantalla. Mientras el proceso esta en borrador se puede editar todo el documento. Si se cambia la fecha antes de confirmar, el sistema vuelve a tomar el tipo de cambio SUNAT venta registrado para la fecha del proceso. Una vez confirmado, el tipo de cambio queda guardado y no cambia automaticamente.
+
+En estado confirmado se pueden editar los detalles documentales del destino, lote y observaciones. Los campos que afectan Kardex quedan bloqueados para no modificar movimientos ya generados. La vista detalle incluye boton `Imprimir PDF`, que abre la impresion del navegador para guardar el proceso en PDF.
 
 Reglas de valorizacion:
 
 - `costo_pergamino_consumido = cantidad_pergamino_kg * costo_promedio_pergamino`.
+- `quintales_procesados = cantidad_pergamino_kg / kg_por_quintal`.
+- `costo_proceso_usd = quintales_procesados * costo_servicio_por_quintal_usd`.
 - `costo_proceso_soles = costo_proceso_usd * tipo_cambio_fecha_proceso`.
+- `costo_servicio_por_kg_usd = costo_proceso_usd / cantidad_pergamino_kg`.
+- `costo_servicio_por_kg_soles = costo_proceso_soles / cantidad_pergamino_kg`.
 - `costo_total_proceso = costo_pergamino_consumido + costo_proceso_soles`.
-- `valor_mercado_subproducto_soles = valor_mercado_subproducto_usd * tipo_cambio_fecha_proceso`.
-- `costo_total_subproductos = suma(cantidad_subproducto * valor_mercado_subproducto_soles)`.
-- `costo_exportable = costo_total_proceso - costo_total_subproductos`.
+- `valor_mercado_exportable_soles = valor_mercado_exportable_usd * tipo_cambio_fecha_proceso`.
+- `costo_exportable = cantidad_exportable * valor_mercado_exportable_soles`.
 - `costo_unitario_exportable = costo_exportable / cantidad_exportable`.
+- `valor_mercado_subproducto_soles = valor_mercado_subproducto_usd * tipo_cambio_fecha_proceso`.
+- Si `valor_mercado_subproducto_usd` queda en blanco, el subproducto toma el ultimo costo promedio Kardex disponible para ese producto a la fecha del proceso.
+- `costo_total_subproductos = suma(cantidad_subproducto * valor_mercado_subproducto_soles)`.
 
 El tipo de cambio se guarda en el proceso como `tipo_cambio_fecha_proceso`. El campo no es editable en pantalla: la app toma el tipo de cambio SUNAT venta registrado para la fecha del proceso. Una vez confirmado, el tipo de cambio queda congelado y no cambia aunque se actualice la tabla de tipo de cambio.
 
@@ -346,22 +354,21 @@ Validaciones principales:
 
 - Fecha obligatoria.
 - Tipo de cambio mayor que cero.
-- Costo de proceso USD mayor o igual que cero.
+- Kg por quintal mayor que cero; por defecto 46 kg.
+- Costo de servicio por quintal USD mayor o igual que cero.
 - Stock suficiente de cafe pergamino a la fecha del proceso.
 - `cantidad_pergamino = cantidad_exportable + cantidad_subproductos + merma`.
-- El costo total de subproductos no puede superar el costo total del proceso.
-- El costo exportable no puede ser negativo.
 - La cantidad exportable debe ser mayor que cero.
 - Si se confirma un proceso historico y existen movimientos posteriores, el sistema recalcula los saldos posteriores de los productos afectados desde la fecha del proceso.
 
 Al confirmar:
 
 - Se genera `PROCESO_SALIDA` para el cafe pergamino.
-- Se genera `PROCESO_ENTRADA` para el cafe exportable con costo residual.
+- Se genera `PROCESO_ENTRADA` para el cafe exportable con valor de mercado convertido a soles.
 - Se genera `PROCESO_ENTRADA` para cada subproducto con valor de mercado convertido a soles.
 - Se registran costo de proceso USD, tipo de cambio usado, costo equivalente en soles y merma fisica no valorizada.
 
-Los procesos confirmados no se editan directamente; cualquier correccion debe hacerse mediante anulacion/nuevo proceso. La anulacion registra movimientos `REVERSION` y solo se permite si los movimientos del proceso siguen siendo los ultimos de los productos involucrados.
+Los procesos confirmados no editan cantidades, productos ni costos directamente; cualquier correccion operativa debe hacerse mediante anulacion/nuevo proceso. La anulacion registra movimientos `REVERSION` y solo se permite si los movimientos del proceso siguen siendo los ultimos de los productos involucrados.
 
 ## Reportes
 
@@ -466,7 +473,7 @@ La exportacion se activa con el parametro `export=excel` en la URL del reporte.
 - Reversion de Pre-Kardex.
 - Reversion de aprobacion.
 - Boton para devolver documentos a pendiente desde Pre-Kardex o Confirmado.
-- Proceso de trillado de cafe con diseno tipo documento, tipo de cambio automatico, costo de proceso USD, subproductos dinamicos y costo residual exportable.
+- Proceso de trillado de cafe con diseno tipo documento, tipo de cambio automatico, costo de proceso USD, subproductos dinamicos y valor de mercado para exportable.
 - Tipo de cambio SUNAT.
 - Mantenimiento DB para backup y restauracion de SQLite.
 - Reportes.
@@ -495,7 +502,7 @@ La suite actual cubre, entre otros:
 - Reversion de aprobacion con bloqueo por movimientos posteriores.
 - Devolucion de documentos a pendiente, incluyendo confirmados con recalculo de saldos posteriores.
 - Stock inicial y edicion controlada.
-- Proceso de trillado: tipo de cambio SUNAT automatico, costo de proceso en soles, costo residual exportable, subproductos a valor de mercado convertido a soles, confirmacion historica y anulacion con reversiones.
+- Proceso de trillado: tipo de cambio SUNAT automatico, costo de proceso en soles, exportable y subproductos a valor de mercado convertido a soles, confirmacion historica y anulacion con reversiones.
 - Reportes principales.
 - Kardex valorizado SUNAT por producto.
 - Reporte mensual de documentos y detalle por mes.

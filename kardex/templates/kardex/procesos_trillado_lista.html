@@ -29,7 +29,7 @@
                 <th>Lote</th>
                 <th>Insumo</th>
                 <th class="text-end">Pergamino KG</th>
-                <th class="text-end">Costo proceso USD</th>
+                <th class="text-end">Total servicio USD</th>
                 <th class="text-end">TC</th>
                 <th class="text-end">Costo total</th>
                 <th>Estado</th>
@@ -44,9 +44,9 @@
                     <td>{{ proceso.lote|default:"-" }}</td>
                     <td>{{ proceso.producto_consumido }}</td>
                     <td class="text-end">{{ proceso.cantidad_consumida|numero }}</td>
-                    <td class="text-end">{{ proceso.costo_proceso_usd|numero }}</td>
-                    <td class="text-end">{{ proceso.tipo_cambio_fecha_proceso|numero }}</td>
-                    <td class="text-end">{{ proceso.costo_total_proceso|numero }}</td>
+                    <td class="text-end">{{ proceso.costo_proceso_usd|usd }}</td>
+                    <td class="text-end">{{ proceso.tipo_cambio_fecha_proceso|numero_6 }}</td>
+                    <td class="text-end">{{ proceso.costo_total_proceso|soles }}</td>
                     <td>
                         {% if proceso.estado == "anulado" %}
                             <span class="badge text-bg-danger">Anulado</span>

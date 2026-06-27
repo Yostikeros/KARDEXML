@@ -97,10 +97,10 @@ class MovimientoKardexAdmin(admin.ModelAdmin):
 
 @admin.register(ProcesoProductivo)
 class ProcesoProductivoAdmin(admin.ModelAdmin):
-    list_display = ("codigo_proceso", "fecha", "lote", "tipo_proceso", "producto_consumido", "cantidad_consumida", "costo_proceso_usd", "tipo_cambio_fecha_proceso", "costo_total_proceso", "estado")
+    list_display = ("codigo_proceso", "fecha", "lote", "tipo_proceso", "producto_consumido", "cantidad_consumida", "costo_servicio_por_quintal_usd", "costo_proceso_usd", "tipo_cambio_fecha_proceso", "costo_total_proceso", "estado")
     search_fields = ("codigo_proceso", "lote", "producto_consumido__nombre", "observaciones")
     list_filter = ("tipo_proceso", "estado", "confirmado", "anulado", "fecha")
-    autocomplete_fields = ("producto_consumido", "usuario_creacion")
+    autocomplete_fields = ("producto_consumido", "cliente_destino_entidad", "usuario_creacion")
 
 
 @admin.register(ProcesoProductoObtenido)

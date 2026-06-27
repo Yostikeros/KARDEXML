@@ -46,7 +46,13 @@ from .services.kardex import (
     revertir_aprobacion_kardex,
     revertir_pre_kardex,
 )
-from .services.procesos import anular_proceso_trillado, actualizar_proceso_trillado, confirmar_proceso_trillado, crear_proceso_trillado
+from .services.procesos import (
+    anular_proceso_trillado,
+    actualizar_detalles_proceso_trillado,
+    actualizar_proceso_trillado,
+    confirmar_proceso_trillado,
+    crear_proceso_trillado,
+)
 from .services.reportes import (
     entidad_documento_reporte,
     obtener_empresa_principal,
@@ -506,8 +512,8 @@ def proceso_trillado_editar_view(request, proceso_id):
         pk=proceso_id,
         tipo_proceso=ProcesoProductivo.TRILLADO,
     )
-    if proceso.confirmado:
-        messages.error(request, "No se puede editar un proceso confirmado. Anula y registra un nuevo proceso.")
+    if proceso.anulado:
+        messages.error(request, "No se pueden editar detalles de un proceso anulado.")
         return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
 
     form = ProcesoTrilladoForm(
@@ -515,14 +521,19 @@ def proceso_trillado_editar_view(request, proceso_id):
         initial=_initial_proceso_trillado(proceso),
         tipo_cambio_proceso=proceso.tipo_cambio_fecha_proceso,
         fecha_proceso=proceso.fecha,
+        solo_detalles=proceso.confirmado,
     )
     if request.method == "POST" and form.is_valid():
-        fecha_cambio = form.cleaned_data["fecha"] != proceso.fecha
-        if not fecha_cambio:
-            form.cleaned_data["tipo_cambio_fecha_proceso"] = proceso.tipo_cambio_fecha_proceso
         try:
-            actualizar_proceso_trillado(proceso, form.cleaned_data)
-            messages.success(request, "Proceso de trillado actualizado.")
+            if proceso.confirmado:
+                actualizar_detalles_proceso_trillado(proceso, form.cleaned_data)
+                messages.success(request, "Detalles del proceso de trillado actualizados.")
+            else:
+                fecha_cambio = form.cleaned_data["fecha"] != proceso.fecha
+                if not fecha_cambio:
+                    form.cleaned_data["tipo_cambio_fecha_proceso"] = proceso.tipo_cambio_fecha_proceso
+                actualizar_proceso_trillado(proceso, form.cleaned_data)
+                messages.success(request, "Proceso de trillado actualizado.")
             return redirect("kardex:proceso_trillado_detalle", proceso_id=proceso.id)
         except KardexError as exc:
             messages.error(request, str(exc))
@@ -532,6 +543,7 @@ def proceso_trillado_editar_view(request, proceso_id):
         {
             "form": form,
             "proceso": proceso,
+            "solo_detalles": proceso.confirmado,
             "tipos_cambio_fecha": _tipos_cambio_fecha_json(),
             "saldos_producto": _saldos_producto_json(),
         },
@@ -541,7 +553,7 @@ def proceso_trillado_editar_view(request, proceso_id):
 @login_required(login_url="/admin/login/")
 def proceso_trillado_detalle_view(request, proceso_id):
     proceso = get_object_or_404(
-        ProcesoProductivo.objects.select_related("producto_consumido", "usuario_creacion")
+        ProcesoProductivo.objects.select_related("producto_consumido", "usuario_creacion", "cliente_destino_entidad")
         .prefetch_related("productos_obtenidos__producto", "movimientos_kardex__producto"),
         pk=proceso_id,
         tipo_proceso=ProcesoProductivo.TRILLADO,
@@ -577,12 +589,24 @@ def _initial_proceso_trillado(proceso):
     initial = {
         "fecha": proceso.fecha,
         "lote": proceso.lote,
+        "factura_destino": proceso.factura_destino,
+        "contrato_destino": proceso.contrato_destino,
+        "cliente_destino_entidad": proceso.cliente_destino_entidad,
         "factura_relacionada": proceso.factura_relacionada,
         "fecha_factura_relacionada": proceso.fecha_factura_relacionada,
+        "valor_total_destino_usd": proceso.valor_total_destino_usd,
+        "tipo_cambio_destino": proceso.tipo_cambio_destino,
+        "valor_total_destino_soles": proceso.valor_total_destino_soles,
         "producto_consumido": proceso.producto_consumido,
         "cantidad_consumida": proceso.cantidad_consumida,
+        "kg_por_quintal": proceso.kg_por_quintal,
+        "quintales_procesados": proceso.quintales_procesados,
+        "costo_servicio_por_quintal_usd": proceso.costo_servicio_por_quintal_usd,
         "costo_proceso_usd": proceso.costo_proceso_usd,
         "tipo_cambio_fecha_proceso": proceso.tipo_cambio_fecha_proceso,
+        "costo_proceso_soles": proceso.costo_proceso_soles,
+        "costo_servicio_por_kg_usd": proceso.costo_servicio_por_kg_usd,
+        "costo_servicio_por_kg_soles": proceso.costo_servicio_por_kg_soles,
         "merma": proceso.merma,
         "observaciones": proceso.observaciones,
     }
@@ -590,6 +614,12 @@ def _initial_proceso_trillado(proceso):
     if principal:
         initial["producto_exportable"] = principal.producto
         initial["cantidad_exportable"] = principal.cantidad_obtenida
+        if proceso.tipo_cambio_fecha_proceso:
+            initial["valor_mercado_exportable"] = (
+                principal.valor_mercado_unitario_soles / proceso.tipo_cambio_fecha_proceso
+            )
+        else:
+            initial["valor_mercado_exportable"] = principal.valor_mercado_unitario_soles
     for index, item in enumerate(proceso.productos_obtenidos.filter(es_principal=False).order_by("id")[:3], start=1):
         initial[f"subproducto_{index}"] = item.producto
         initial[f"cantidad_subproducto_{index}"] = item.cantidad_obtenida

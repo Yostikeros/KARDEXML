@@ -1,3 +1,4 @@
+/* Variables globales: colores, fuentes, sombras y medidas base usadas en toda la web. */
 :root {
     --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     --sidebar-width: 264px;
@@ -13,6 +14,7 @@
     --shadow-soft: 0 8px 24px rgba(15, 23, 42, 0.05);
 }
 
+/* Base del sitio: normalizacion general, tipografia, fondo y controles HTML comunes. */
 * {
     box-sizing: border-box;
 }
@@ -44,10 +46,12 @@ a {
     text-underline-offset: 2px;
 }
 
+/* Layout principal: estructura general de la aplicacion y espacio del sidebar. */
 .app-layout {
     min-height: 100vh;
 }
 
+/* Sidebar de escritorio: marca, secciones, navegacion y usuario en el menu lateral. */
 .app-sidebar {
     position: fixed;
     inset: 0 auto 0 0;
@@ -210,6 +214,7 @@ a {
     white-space: nowrap;
 }
 
+/* Navegacion movil: barra superior y offcanvas usado cuando no se muestra el sidebar. */
 .mobile-topbar {
     position: sticky;
     top: 0;
@@ -245,6 +250,7 @@ a {
     min-height: 100%;
 }
 
+/* Contenido principal: margen respecto al sidebar y ancho maximo de las paginas. */
 .app-main {
     min-height: 100vh;
     margin-left: var(--sidebar-width);
@@ -256,6 +262,7 @@ a {
     margin-inline: auto;
 }
 
+/* Encabezados de pagina: titulo, descripcion y acciones superiores. */
 .page-heading {
     display: flex;
     align-items: center;
@@ -285,6 +292,7 @@ h1.h3 {
     font-weight: 400;
 }
 
+/* Botones y acciones: ajustes visuales para Bootstrap y botones principales del sistema. */
 h2,
 .h4,
 .h5,
@@ -338,6 +346,7 @@ h2,
     line-height: 1;
 }
 
+/* Tarjetas y contenedores: paneles reutilizables para formularios, listados y resumenes. */
 .card,
 .data-card {
     border: 1px solid var(--border-soft);
@@ -378,6 +387,7 @@ h2,
     font-weight: 400;
 }
 
+/* Indicadores del dashboard: tarjetas metricas, iconos y graficos de resumen. */
 .metric-grid {
     display: grid;
     grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -445,6 +455,7 @@ h2,
 .metric-icon-red { background: #fee2e2; color: #b91c1c; }
 .metric-icon-slate { background: #f1f5f9; color: #334155; }
 
+/* Formularios: labels, inputs, selects, checks y textos de ayuda. */
 .form-label {
     color: #374151;
     font-size: 0.9rem;
@@ -479,6 +490,7 @@ h2,
     border-color: #cbd5e1;
 }
 
+/* Tablas generales: contenedores responsive, encabezados, celdas y hover de listados. */
 .table-responsive,
 .table-wrapper {
     width: 100%;
@@ -561,6 +573,7 @@ td,
     padding: 11px 14px;
 }
 
+/* Utilidades de celdas: alineacion numerica, fechas y columnas de producto. */
 .text-end,
 td.numeric,
 th.numeric,
@@ -583,6 +596,7 @@ th.date,
     font-weight: 400;
 }
 
+/* Badges y estados: etiquetas visuales para movimientos y estados vacios. */
 .movement-badge {
     display: inline-flex;
     align-items: center;
@@ -618,6 +632,7 @@ th.date,
     color: var(--text-muted);
 }
 
+/* Tabla SUNAT/kardex: ancho extendido y columnas especificas para reportes contables. */
 .sunat-table-wrapper {
     width: 100%;
     overflow-x: auto;
@@ -659,6 +674,7 @@ th.date,
     min-width: 92px;
 }
 
+/* Documento de proceso: layout base para formularios de procesos productivos. */
 .process-document {
     width: min(100%, 1400px);
     max-width: 1400px;
@@ -688,6 +704,7 @@ th.date,
     white-space: normal;
 }
 
+/* Cabecera y paneles de proceso: hero, estado, bandas y contenedores internos. */
 .process-hero,
 .process-band,
 .process-panel,
@@ -777,6 +794,7 @@ th.date,
     padding: 28px;
 }
 
+/* Grillas de proceso: distribucion principal, columnas laterales y campos del formulario. */
 .process-main-grid {
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
@@ -850,6 +868,7 @@ th.date,
     flex-wrap: wrap;
 }
 
+/* Subproductos del proceso: filas editables para producto, kilos, valor y acciones. */
 .subproduct-grid {
     display: grid;
     gap: 12px;
@@ -876,6 +895,7 @@ th.date,
     white-space: nowrap;
 }
 
+/* Balance e indicadores: cajas de rendimiento, merma y resultados calculados. */
 .balance-grid,
 .indicator-grid {
     display: grid;
@@ -938,6 +958,7 @@ th.date,
     flex: 0 0 auto;
 }
 
+/* Responsive general: adapta dashboard, layout principal y formularios de proceso. */
 @media (max-width: 1199.98px) {
     .metric-grid,
     .dashboard-analysis-grid {
@@ -1064,15 +1085,16 @@ th.date,
     }
 }
 
-/* Documento de proceso de trillado: layout ancho y lineal */
+/* Documento de proceso de trillado: layout ancho y lineal de la vista de trillado. */
 .process-document-wide {
     width: min(100%, 1500px);
     max-width: 1500px;
     margin: 0 auto;
-    padding: 24px;
-    gap: 24px;
+    padding: 20px;
+    gap: 16px;
 }
 
+/* Cabecera del documento de trillado: datos de proceso, lote, factura y metadatos. */
 .process-doc-header,
 .process-doc-card,
 .process-bottom-actions {
@@ -1085,9 +1107,9 @@ th.date,
 .process-doc-header {
     display: grid;
     grid-template-columns: minmax(360px, 1fr) auto auto;
-    gap: 24px;
+    gap: 16px;
     align-items: center;
-    padding: 24px;
+    padding: 18px;
 }
 
 .process-doc-meta {
@@ -1127,12 +1149,13 @@ th.date,
     min-width: 0;
 }
 
+/* Tarjetas internas de trillado: datos generales, destino, origen, resultados y resumen. */
 .process-doc-card {
-    padding: 24px;
+    padding: 16px;
 }
 
 .process-card-title {
-    margin: 0 0 18px;
+    margin: 0 0 14px;
     color: var(--text-base);
     font-size: 1.08rem;
     font-weight: 700;
@@ -1142,8 +1165,8 @@ th.date,
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
-    margin-bottom: 18px;
+    gap: 14px;
+    margin-bottom: 14px;
 }
 
 .process-card-heading .process-card-title {
@@ -1153,58 +1176,297 @@ th.date,
 .process-origin-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 18px;
-    margin: 20px 0;
+    gap: 14px;
+    margin: 16px 0;
 }
 
+.process-general-grid,
+.process-origin-form-grid,
+.process-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 14px;
+}
+
+.process-field-full {
+    grid-column: span 2;
+}
+
+.process-detail-grid div {
+    min-width: 0;
+    padding: 12px 14px;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.process-detail-grid span {
+    display: block;
+    margin-bottom: 6px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+.process-detail-grid strong {
+    display: block;
+    color: var(--text-base);
+    overflow-wrap: anywhere;
+}
+
+/* Tablas del proceso de trillado: resultados, costos, valor mercado y columnas editables. */
 .process-table-wrap {
     width: 100%;
+    max-width: 100%;
     overflow-x: auto;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    background: var(--bg-card);
+    -webkit-overflow-scrolling: touch;
+}
+
+.process-table-wrap::-webkit-scrollbar {
+    height: 10px;
+}
+
+.process-table-wrap::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 999px;
+}
+
+.process-table-wrap::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+}
+
+.process-table-wrap::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
 }
 
 .process-results-table {
     width: 100%;
-    min-width: 1120px;
-    border-collapse: separate;
-    border-spacing: 0;
-    table-layout: fixed;
+    min-width: 0;
+    margin-bottom: 0;
+    border-collapse: collapse;
+    table-layout: auto;
+    font-size: 12.5px;
+    line-height: 1.35;
 }
 
 .process-results-table th,
 .process-results-table td {
-    padding: 12px;
-    border-bottom: 1px solid var(--border-soft);
-    vertical-align: top;
+    min-width: 0;
+    padding: 8px 8px;
+    border-bottom: 1px solid var(--border-subtle);
+    vertical-align: middle;
 }
 
 .process-results-table th {
-    color: #475569;
-    background: #f8fafc;
-    font-size: 0.78rem;
-    font-weight: 700;
+    background: var(--bg-soft);
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    white-space: nowrap;
+    text-align: left;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+.process-results-table td {
+    color: var(--text-base);
+    font-weight: 400;
+    white-space: nowrap;
+}
+
+.process-results-table tbody tr:hover td {
+    background: #f9fafb;
+}
+
+.process-results-table .numeric,
+.process-results-table th.numeric,
+.process-results-table td.numeric {
+    text-align: right !important;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.process-results-table .col-product {
+    flex: 0 0 auto;
+    width: auto;
+   /* min-width: 0;
+    white-space: normal;*/
+}
+
+.process-results-table .product-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    font-weight: 400;
+}
+
+.process-results-table .product-cell strong {
+    color: var(--text-base);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
+}
+
+.process-results-table .product-cell span {
+    color: var(--text-muted);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.2;
+}
+
+.process-results-table tfoot th {
+    background: var(--bg-soft);
+    border-top: 1px solid var(--border-soft);
+    border-bottom: 0;
+    color: #374151;
+    font-weight: 600;
     text-transform: none;
 }
 
-.process-results-table th:nth-child(1) { width: 128px; }
-.process-results-table th:nth-child(2) { width: 360px; }
-.process-results-table th:nth-child(3) { width: 140px; }
-.process-results-table th:nth-child(4) { width: 160px; }
-.process-results-table th:nth-child(5) { width: 160px; }
-.process-results-table th:nth-child(6) { width: 140px; }
-.process-results-table th:nth-child(7) { width: 112px; }
+.process-results-table .strong {
+    font-weight: 600;
+}
+
+.process-results-table .muted {
+    color: var(--text-muted);
+}
+
+.process-results-table .movement-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 86px;
+    min-height: 24px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.process-results-table .movement-in {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.process-results-table .movement-neutral {
+    background: #f1f5f9;
+    color: #475569;
+}
+
+.process-results-table .movement-adjust {
+    background: #e0e7ff;
+    color: #3730a3;
+}
 
 .process-results-table .form-control,
-.process-results-table .form-select,
-.process-doc-card .form-control,
-.process-doc-card .form-select {
+.process-results-table .form-select {
+    width: 100%;
+    min-width: 0;
+    min-height: 32px;
+    height: 32px;
+    padding: 6px 8px;
+    border-radius: 7px;
+    font-size: 12.5px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+}
+
+.process-results-table .numeric .form-control {
+    width: 100%;
+    min-width: 0;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.process-results-table .numeric .form-control[data-currency="USD"] {
     width: 100%;
     min-width: 0;
 }
 
-.process-results-table .form-select {
-    text-overflow: ellipsis;
+.process-results-table .col-product .form-select {
+    width: 100%;
+    min-width: 0;
+    max-width: 260px; /* Evita que el select se estire de más e invada a KG */
+}
+.process-results-table .subproduct-remove {
+    width: 100%;
+    min-width: 0;
+    padding-inline: 6px;
 }
 
+.process-results-table .calculated-value {
+    min-height: auto;
+    padding: 0;
+    text-align: right;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.process-results-table .calculated-value.strong,
+.process-results-table .strong {
+    font-weight: 600;
+}
+
+.process-results-table tfoot th {
+    white-space: nowrap;
+}
+
+.process-results-table th:nth-child(1),
+.process-results-table td:nth-child(1) { width: 92px; }
+
+.process-results-table th:nth-child(2),
+.process-results-table td:nth-child(2) { 
+    width: 260px;
+    max-width: 260px;
+}
+
+.process-results-table th:nth-child(3),
+.process-results-table td:nth-child(3) { 
+    width: 120px !important; 
+    min-width: 120px !important; 
+}
+
+.process-results-table th:nth-child(4),
+.process-results-table td:nth-child(4) { width: 70px; }
+
+.process-results-table th:nth-child(5),
+.process-results-table td:nth-child(5) {     
+    width: 120px !important; 
+    min-width: 120px !important; 
+}
+
+
+.process-results-table th:nth-child(6),
+.process-results-table td:nth-child(6) { width: 112px; }
+
+.process-results-table th:nth-child(7),
+.process-results-table td:nth-child(7) { width: 76px; }
+
+.process-results-table th:nth-child(8),
+.process-results-table td:nth-child(8) { width: 112px; }
+
+.process-results-table th:nth-child(9),
+.process-results-table td:nth-child(9) { width: 84px; }
+
+.process-results-table th:nth-child(10),
+.process-results-table td:nth-child(10) { width: 74px; }
+
+.process-card-subtitle {
+    margin: 4px 0 0;
+    color: var(--text-muted);
+    font-size: 13px;
+    font-weight: 400;
+}
+
+/* Valores calculados: importes y cantidades de solo lectura mostrados en formularios. */
 .calculated-value {
     display: block;
     min-height: 38px;
@@ -1231,10 +1493,12 @@ th.date,
     font-variant-numeric: tabular-nums;
 }
 
+/* Resumen del proceso: balance fisico, valorizacion, asignacion y estado. */
 .process-summary-grid {
     display: grid;
-    grid-template-columns: repeat(3, minmax(260px, 1fr));
+    grid-template-columns: minmax(260px, 0.85fr) minmax(430px, 1.45fr) minmax(260px, 0.85fr);
     gap: 20px;
+    align-items: start;
 }
 
 .process-summary-block {
@@ -1246,8 +1510,31 @@ th.date,
 
 .process-summary-block h2 {
     margin: 0 0 14px;
+    color: var(--text-base);
     font-size: 0.98rem;
     font-weight: 700;
+}
+
+.process-summary-block .summary-group {
+    padding-top: 12px;
+    margin-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.process-summary-block .summary-group:first-of-type {
+    padding-top: 0;
+    margin-top: 0;
+    border-top: 0;
+}
+
+.process-summary-block .summary-group h3 {
+    margin: 0 0 10px;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
 }
 
 .process-summary-block dl {
@@ -1257,24 +1544,62 @@ th.date,
 }
 
 .process-summary-block dl div {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
     gap: 16px;
+    align-items: center;
     border-bottom: 1px solid #e5e7eb;
     padding-bottom: 8px;
 }
 
+.process-summary-block dl div:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
 .process-summary-block dt {
+    min-width: 0;
     color: #475569;
+    font-size: 0.86rem;
     font-weight: 500;
 }
 
 .process-summary-block dd {
     margin: 0;
+    color: var(--text-base);
+    font-size: 0.88rem;
     font-weight: 700;
     text-align: right;
     white-space: nowrap;
     font-variant-numeric: tabular-nums;
+}
+
+.summary-status {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.summary-status-ok {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.summary-status-warning {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.summary-status-error {
+    background: #fee2e2;
+    color: #991b1b;
 }
 
 .process-bottom-actions {
@@ -1284,6 +1609,7 @@ th.date,
     padding: 20px 24px;
 }
 
+/* Responsive de trillado: compacta cabecera, tarjetas, acciones y resumen. */
 @media (max-width: 1199.98px) {
     .process-doc-header {
         grid-template-columns: 1fr;
@@ -1301,12 +1627,12 @@ th.date,
 
 @media (max-width: 767.98px) {
     .process-document-wide {
-        padding: 14px;
+        padding: 12px;
     }
 
     .process-doc-card,
     .process-doc-header {
-        padding: 18px;
+        padding: 14px;
     }
 
     .process-card-heading,
@@ -1318,5 +1644,172 @@ th.date,
     .process-bottom-actions .btn,
     .process-card-heading .btn {
         width: 100%;
+    }
+
+    .process-field-full {
+        grid-column: auto;
+    }
+}
+
+/* Impresion y PDF: oculta navegacion y ajusta tablas para imprimir la vista detalle. */
+@media print {
+    @page {
+        size: A4;
+        margin: 12mm;
+    }
+
+    body {
+        background: #ffffff;
+        color: #111827;
+        font-size: 10pt;
+    }
+
+    .app-sidebar,
+    .mobile-topbar,
+    .app-mobile-sidebar,
+    .no-print,
+    .alert {
+        display: none !important;
+    }
+
+    .app-main {
+        margin-left: 0 !important;
+    }
+
+    .app-content {
+        width: 100%;
+        max-width: none;
+        padding: 0;
+    }
+
+    .page-heading,
+    .data-card,
+    .card {
+        break-inside: avoid;
+        box-shadow: none !important;
+    }
+
+    .data-card,
+    .card {
+        border: 1px solid #d1d5db !important;
+    }
+
+    .process-detail-grid,
+    .row {
+        break-inside: avoid;
+    }
+
+    .table-responsive,
+    .process-table-wrap {
+        overflow: visible !important;
+    }
+
+    .app-table,
+    .table {
+        font-size: 8.5pt;
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+    }
+}
+
+/* Origen compacto: tarjeta de origen del proceso con calculos de servicio y costo. */
+.origin-compact-layout {
+    display: grid;
+    gap: 12px;
+}
+
+.origin-main-row {
+    display: grid;
+    grid-template-columns: minmax(320px, 1fr) minmax(160px, 210px);
+    gap: 14px;
+    align-items: end;
+}
+
+.origin-calc-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+}
+
+.origin-calc-panel {
+    padding: 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: 8px;
+    background: #f8fafc;
+}
+
+.origin-result-panel {
+    background: #f9fafb;
+}
+
+.origin-panel-title {
+    margin-bottom: 10px;
+    color: #475569;
+    font-size: 0.78rem;
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.origin-mini-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(120px, 1fr));
+    gap: 10px;
+    align-items: start;
+}
+
+.origin-notes-row {
+    padding-top: 2px;
+}
+
+.process-origin-card .form-control,
+.process-origin-card .form-select,
+.process-origin-card .readonly-calculated {
+    min-height: 34px;
+    height: 34px;
+    font-size: 13px;
+}
+
+.process-origin-card .form-control,
+.process-origin-card .readonly-calculated {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.process-origin-card .form-select {
+    text-align: left;
+}
+
+.process-origin-card textarea.form-control {
+    min-height: 82px;
+    height: auto;
+    text-align: left;
+    white-space: normal;
+}
+
+.process-origin-card .form-text {
+    margin-top: 5px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+}
+
+@media (max-width: 1199.98px) {
+    .origin-main-row,
+    .origin-calc-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .origin-mini-grid {
+        grid-template-columns: repeat(2, minmax(140px, 1fr));
+    }
+}
+
+@media (max-width: 767.98px) {
+    .origin-mini-grid {
+        grid-template-columns: 1fr;
     }
 }

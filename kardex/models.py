@@ -1,4 +1,4 @@
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.conf import settings
 from django.db import models
@@ -559,22 +559,40 @@ class ProcesoProductivo(TimeStampedModel):
     tipo_proceso = models.CharField(max_length=30, choices=TIPO_PROCESO_CHOICES, default=TRILLADO)
     fecha = models.DateField()
     lote = models.CharField(max_length=100, blank=True)
+    contrato_destino = models.CharField(max_length=100, blank=True)
+    cliente_destino = models.CharField(max_length=255, blank=True)
+    cliente_destino_entidad = models.ForeignKey(
+        Entidad,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name='procesos_trillado_destino',
+    )
     factura_relacionada = models.CharField(max_length=100, blank=True)
+    factura_destino = models.CharField(max_length=100, blank=True)
     fecha_factura_relacionada = models.DateField(null=True, blank=True)
+    valor_total_destino_usd = models.DecimalField(max_digits=24, decimal_places=2, default=Decimal('0'))
+    tipo_cambio_destino = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal('0'))
+    valor_total_destino_soles = models.DecimalField(max_digits=24, decimal_places=2, default=Decimal('0'))
     producto_consumido = models.ForeignKey(
         Producto,
         on_delete=models.PROTECT,
         related_name='procesos_como_insumo',
     )
-    cantidad_consumida = models.DecimalField(max_digits=18, decimal_places=6)
-    merma = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
-    costo_proceso_usd = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
+    cantidad_consumida = models.DecimalField(max_digits=24, decimal_places=6)
+    merma = models.DecimalField(max_digits=24, decimal_places=6, default=Decimal('0'))
+    kg_por_quintal = models.DecimalField(max_digits=24, decimal_places=6, default=Decimal('46'))
+    quintales_procesados = models.DecimalField(max_digits=24, decimal_places=6, default=Decimal('0'))
+    costo_servicio_por_quintal_usd = models.DecimalField(max_digits=24, decimal_places=6, default=Decimal('5'))
+    costo_proceso_usd = models.DecimalField(max_digits=24, decimal_places=6, default=Decimal('0'))
     tipo_cambio_fecha_proceso = models.DecimalField(max_digits=12, decimal_places=6, default=Decimal('0'))
-    costo_proceso_soles = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
-    costo_pergamino_consumido = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
-    costo_total_proceso = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
-    costo_exportable = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
-    costo_unitario_exportable = models.DecimalField(max_digits=18, decimal_places=6, default=Decimal('0'))
+    costo_proceso_soles = models.DecimalField(max_digits=24, decimal_places=2, default=Decimal('0'))
+    costo_servicio_por_kg_usd = models.DecimalField(max_digits=24, decimal_places=6, default=Decimal('0'))
+    costo_servicio_por_kg_soles = models.DecimalField(max_digits=24, decimal_places=6, default=Decimal('0'))
+    costo_pergamino_consumido = models.DecimalField(max_digits=24, decimal_places=2, default=Decimal('0'))
+    costo_total_proceso = models.DecimalField(max_digits=24, decimal_places=2, default=Decimal('0'))
+    costo_exportable = models.DecimalField(max_digits=24, decimal_places=2, default=Decimal('0'))
+    costo_unitario_exportable = models.DecimalField(max_digits=24, decimal_places=6, default=Decimal('0'))
     observaciones = models.TextField(blank=True)
     estado = models.CharField(max_length=20, choices=ESTADO_CHOICES, default=BORRADOR)
     confirmado = models.BooleanField(default=False)
@@ -602,6 +620,43 @@ class ProcesoProductivo(TimeStampedModel):
     def __str__(self):
         return f'{self.codigo_proceso or "Proceso"} - {self.fecha}'
 
+    @property
+    def valor_mercado_exportable_soles(self):
+        return sum(
+            (item.valor_mercado_total_soles for item in self.productos_obtenidos.all() if item.es_principal),
+            Decimal('0'),
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def valor_mercado_subproductos_soles(self):
+        return sum(
+            (item.valor_mercado_total_soles for item in self.productos_obtenidos.all() if not item.es_principal),
+            Decimal('0'),
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def costo_asignado_exportable(self):
+        return sum(
+            (item.costo_asignado for item in self.productos_obtenidos.all() if item.es_principal),
+            Decimal('0'),
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def costo_asignado_subproductos(self):
+        return sum(
+            (item.costo_asignado for item in self.productos_obtenidos.all() if not item.es_principal),
+            Decimal('0'),
+        ).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def diferencia_asignacion(self):
+        asignado = self.costo_asignado_exportable + self.costo_asignado_subproductos
+        return (self.costo_total_proceso - asignado).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+
+    @property
+    def estado_valorizacion(self):
+        return 'Correcto' if self.diferencia_asignacion == Decimal('0.00') else 'Diferencia'
+
 
 class ProcesoProductoObtenido(models.Model):
     proceso = models.ForeignKey(
@@ -615,14 +670,14 @@ class ProcesoProductoObtenido(models.Model):
         related_name='procesos_como_resultado',
     )
     es_principal = models.BooleanField(default=False)
-    cantidad_obtenida = models.DecimalField(max_digits=18, decimal_places=6)
+    cantidad_obtenida = models.DecimalField(max_digits=24, decimal_places=6)
     valor_mercado_unitario_soles = models.DecimalField(
-        max_digits=18,
+        max_digits=24,
         decimal_places=6,
         default=Decimal('0'),
         db_column='valor_mercado_unitario',
     )
-    costo_asignado = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal('0'))
+    costo_asignado = models.DecimalField(max_digits=24, decimal_places=2, default=Decimal('0'))
 
     class Meta:
         verbose_name = 'producto obtenido de proceso'
@@ -640,6 +695,47 @@ class ProcesoProductoObtenido(models.Model):
     @property
     def valor_mercado_unitario(self):
         return self.valor_mercado_unitario_soles
+
+    @property
+    def valor_mercado_unitario_usd(self):
+        tipo_cambio = self.proceso.tipo_cambio_fecha_proceso if self.proceso_id else Decimal('0')
+        if not tipo_cambio:
+            return Decimal('0')
+        return (self.valor_mercado_unitario_soles / tipo_cambio).quantize(
+            Decimal('0.000001'),
+            rounding=ROUND_HALF_UP,
+        )
+
+    @property
+    def valor_mercado_total_soles(self):
+        return (self.cantidad_obtenida * self.valor_mercado_unitario_soles).quantize(
+            Decimal('0.01'),
+            rounding=ROUND_HALF_UP,
+        )
+
+    @property
+    def factor_asignacion(self):
+        if not self.proceso_id:
+            return Decimal('0')
+        total = sum(
+            (item.valor_mercado_total_soles for item in self.proceso.productos_obtenidos.all()),
+            Decimal('0'),
+        )
+        if not total:
+            return Decimal('0')
+        return ((self.valor_mercado_total_soles / total) * Decimal('100')).quantize(
+            Decimal('0.0001'),
+            rounding=ROUND_HALF_UP,
+        )
+
+    @property
+    def costo_unitario_resultante_soles(self):
+        if not self.cantidad_obtenida:
+            return Decimal('0')
+        return (self.costo_asignado / self.cantidad_obtenida).quantize(
+            Decimal('0.000001'),
+            rounding=ROUND_HALF_UP,
+        )
 
 
 class Auditoria(models.Model):

@@ -36,7 +36,7 @@ from .services.kardex import (
 )
 from .services.procesos import anular_proceso_trillado, confirmar_proceso_trillado, crear_proceso_trillado
 from .services.reportes import obtener_documentos_mensual, obtener_stock_actual
-from .templatetags.kardex_format import fecha_corta, numero
+from .templatetags.kardex_format import fecha_corta, numero, numero_6, soles, usd, usd_6
 from .services.xml_importer import XMLImportError, importar_xml
 
 
@@ -1684,6 +1684,12 @@ class XMLImporterTests(TestCase):
         self.assertEqual(numero('1234567.891'), '1,234,567.89')
         self.assertEqual(numero(1000), '1,000.00')
 
+    def test_formato_monetario_muestra_moneda_y_comas(self):
+        self.assertEqual(usd('133863.31'), 'USD 133,863.31')
+        self.assertEqual(soles('508680.584'), 'S/ 508,680.58')
+        self.assertEqual(usd_6('0.2173912'), 'USD 0.217391')
+        self.assertEqual(numero_6('3.7'), '3.700000')
+
     def test_formato_fecha_corta_usa_dia_mes_anio(self):
         self.assertEqual(fecha_corta(date(2026, 6, 25)), '25/06/2026')
 
@@ -1790,8 +1796,8 @@ class ProcesoTrilladoTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username='admin', password='admin12345')
         self.pergamino = Producto.objects.create(
-            codigo_interno='MP-PERG',
-            nombre='Cafe pergamino',
+            codigo_interno='CAPS',
+            nombre='CAFE PERGAMINO CONVENCIONAL',
             tipo_producto=Producto.MATERIA_PRIMA,
         )
         self.exportable = Producto.objects.create(
@@ -1803,6 +1809,12 @@ class ProcesoTrilladoTests(TestCase):
             codigo_interno='SP-CASC',
             nombre='Cafe subproducto',
             tipo_producto=Producto.SUBPRODUCTO,
+        )
+        self.cliente = Entidad.objects.create(
+            tipo_documento_identidad=Entidad.OTRO,
+            numero_documento='VOLCAFE-LTD',
+            razon_social='VOLCAFE LTD',
+            es_cliente=True,
         )
         registrar_stock_inicial(
             producto=self.pergamino,
@@ -1818,6 +1830,13 @@ class ProcesoTrilladoTests(TestCase):
             compra=Decimal('3.600000'),
             venta=Decimal('3.700000'),
         )
+        TipoCambioSunat.objects.create(
+            mes='abril',
+            anio=2026,
+            dia=22,
+            compra=Decimal('3.700000'),
+            venta=Decimal('3.800000'),
+        )
 
     def test_formulario_trillado_toma_tipo_cambio_sunat_si_no_se_ingresa(self):
         form = ProcesoTrilladoForm(
@@ -1825,9 +1844,11 @@ class ProcesoTrilladoTests(TestCase):
                 'fecha': '2026-06-26',
                 'producto_consumido': self.pergamino.id,
                 'cantidad_consumida': '1000',
-                'costo_proceso_usd': '100',
+                'kg_por_quintal': '1000',
+                'costo_servicio_por_quintal_usd': '100',
                 'producto_exportable': self.exportable.id,
                 'cantidad_exportable': '760',
+                'valor_mercado_exportable': '2.5',
                 'merma': '60',
                 'subproducto_1': self.subproducto.id,
                 'cantidad_subproducto_1': '180',
@@ -1837,6 +1858,34 @@ class ProcesoTrilladoTests(TestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['tipo_cambio_fecha_proceso'], Decimal('3.700000'))
+
+    def test_formulario_trillado_bloquea_producto_origen_a_caps(self):
+        otro_pergamino = Producto.objects.create(
+            codigo_interno='MP-OTRO',
+            nombre='Cafe pergamino organico',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        form = ProcesoTrilladoForm(
+            data={
+                'fecha': '2026-06-26',
+                'producto_consumido': otro_pergamino.id,
+                'cantidad_consumida': '1000',
+                'kg_por_quintal': '1000',
+                'costo_servicio_por_quintal_usd': '100',
+                'producto_exportable': self.exportable.id,
+                'cantidad_exportable': '760',
+                'valor_mercado_exportable': '2.5',
+                'merma': '60',
+                'subproducto_1': self.subproducto.id,
+                'cantidad_subproducto_1': '180',
+                'valor_mercado_subproducto_1': '1.5',
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertTrue(form.fields['producto_consumido'].disabled)
+        self.assertEqual(list(form.fields['producto_consumido'].queryset), [self.pergamino])
+        self.assertEqual(form.cleaned_data['producto_consumido'], self.pergamino)
 
     def test_formulario_trillado_ignora_tipo_cambio_manual_y_usa_fecha(self):
         form = ProcesoTrilladoForm(
@@ -1844,10 +1893,12 @@ class ProcesoTrilladoTests(TestCase):
                 'fecha': '2026-06-26',
                 'producto_consumido': self.pergamino.id,
                 'cantidad_consumida': '1000',
-                'costo_proceso_usd': '100',
+                'kg_por_quintal': '1000',
+                'costo_servicio_por_quintal_usd': '100',
                 'tipo_cambio_fecha_proceso': '9.999999',
                 'producto_exportable': self.exportable.id,
                 'cantidad_exportable': '760',
+                'valor_mercado_exportable': '2.5',
                 'merma': '60',
                 'subproducto_1': self.subproducto.id,
                 'cantidad_subproducto_1': '180',
@@ -1858,19 +1909,100 @@ class ProcesoTrilladoTests(TestCase):
         self.assertTrue(form.is_valid(), form.errors)
         self.assertEqual(form.cleaned_data['tipo_cambio_fecha_proceso'], Decimal('3.700000'))
 
+    def test_formulario_trillado_calcula_servicio_por_quintal(self):
+        form = ProcesoTrilladoForm(
+            data={
+                'fecha': '2026-06-26',
+                'producto_consumido': self.pergamino.id,
+                'cantidad_consumida': '1000',
+                'kg_por_quintal': '46',
+                'costo_servicio_por_quintal_usd': '10',
+                'producto_exportable': self.exportable.id,
+                'cantidad_exportable': '760',
+                'valor_mercado_exportable': '2.5',
+                'merma': '60',
+                'subproducto_1': self.subproducto.id,
+                'cantidad_subproducto_1': '180',
+                'valor_mercado_subproducto_1': '1.5',
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['kg_por_quintal'], Decimal('46'))
+        self.assertEqual(form.cleaned_data['quintales_procesados'], Decimal('21.739130'))
+        self.assertEqual(form.cleaned_data['costo_proceso_usd'], Decimal('217.391300'))
+        self.assertEqual(form.cleaned_data['costo_proceso_soles'], Decimal('804.35'))
+        self.assertEqual(form.cleaned_data['costo_servicio_por_kg_usd'], Decimal('0.217391'))
+        self.assertEqual(form.cleaned_data['costo_servicio_por_kg_soles'], Decimal('0.804350'))
+
+    def test_formulario_trillado_acepta_numeros_con_comas_y_moneda(self):
+        form = ProcesoTrilladoForm(
+            data={
+                'fecha': '2026-06-26',
+                'factura_destino': 'E001-1796',
+                'fecha_factura_relacionada': '2026-04-22',
+                'cliente_destino_entidad': self.cliente.id,
+                'contrato_destino': 'P81267.000',
+                'valor_total_destino_usd': 'USD 133,863.31',
+                'producto_consumido': self.pergamino.id,
+                'cantidad_consumida': '1,000.000000',
+                'kg_por_quintal': '46.000000',
+                'costo_servicio_por_quintal_usd': 'USD 5.000000',
+                'producto_exportable': self.exportable.id,
+                'cantidad_exportable': '760.000000',
+                'valor_mercado_exportable': 'USD 2.500000',
+                'merma': '60.000000',
+                'subproducto_1': self.subproducto.id,
+                'cantidad_subproducto_1': '180.000000',
+                'valor_mercado_subproducto_1': 'USD 1.500000',
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['valor_total_destino_usd'], Decimal('133863.31'))
+        self.assertEqual(form.cleaned_data['valor_total_destino_soles'], Decimal('508680.58'))
+        self.assertEqual(form.cleaned_data['cantidad_consumida'], Decimal('1000.000000'))
+        self.assertEqual(form.cleaned_data['costo_servicio_por_quintal_usd'], Decimal('5.000000'))
+
+    def test_formulario_trillado_acepta_cantidades_grandes_con_seis_decimales(self):
+        form = ProcesoTrilladoForm(
+            data={
+                'fecha': '2026-06-26',
+                'producto_consumido': self.pergamino.id,
+                'cantidad_consumida': '1234567890123.123456',
+                'kg_por_quintal': '46',
+                'costo_servicio_por_quintal_usd': '5',
+                'producto_exportable': self.exportable.id,
+                'cantidad_exportable': '1000000000000.000000',
+                'valor_mercado_exportable': '2.5',
+                'merma': '234567890123.123456',
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        self.assertEqual(form.cleaned_data['quintales_procesados'], Decimal('26838432393.980945'))
+
     def test_guardar_borrador_trillado_calcula_resumen_valorizado(self):
         proceso = crear_proceso_trillado(
             {
                 'fecha': date(2026, 6, 26),
                 'lote': 'L-001',
-                'factura_relacionada': 'FAC-EXT-001',
-                'fecha_factura_relacionada': date(2026, 6, 27),
+                'factura_relacionada': 'PROC-001',
+                'factura_destino': 'E001-1796',
+                'fecha_factura_relacionada': date(2026, 4, 22),
+                'cliente_destino_entidad': self.cliente,
+                'contrato_destino': 'P81267.000',
+                'valor_total_destino_usd': Decimal('133863.31'),
+                'tipo_cambio_destino': Decimal('3.800000'),
+                'valor_total_destino_soles': Decimal('508680.58'),
                 'producto_consumido': self.pergamino,
                 'cantidad_consumida': Decimal('1000'),
-                'costo_proceso_usd': Decimal('100'),
+                'kg_por_quintal': Decimal('1000'),
+                'costo_servicio_por_quintal_usd': Decimal('100'),
                 'tipo_cambio_fecha_proceso': Decimal('3.700000'),
                 'producto_exportable': self.exportable,
                 'cantidad_exportable': Decimal('760'),
+                'valor_mercado_exportable': Decimal('2.5'),
                 'merma': Decimal('60'),
                 'subproducto_1': self.subproducto,
                 'cantidad_subproducto_1': Decimal('180'),
@@ -1885,26 +2017,187 @@ class ProcesoTrilladoTests(TestCase):
         self.assertEqual(proceso.estado, ProcesoProductivo.BORRADOR)
         self.assertTrue(proceso.codigo_proceso.startswith('TRI-2026-'))
         self.assertEqual(proceso.lote, 'L-001')
-        self.assertEqual(proceso.factura_relacionada, 'FAC-EXT-001')
-        self.assertEqual(proceso.fecha_factura_relacionada, date(2026, 6, 27))
+        self.assertEqual(proceso.factura_relacionada, 'PROC-001')
+        self.assertEqual(proceso.factura_destino, 'E001-1796')
+        self.assertEqual(proceso.fecha_factura_relacionada, date(2026, 4, 22))
+        self.assertEqual(proceso.cliente_destino_entidad, self.cliente)
+        self.assertEqual(proceso.contrato_destino, 'P81267.000')
+        self.assertEqual(proceso.cliente_destino, 'VOLCAFE LTD')
+        self.assertEqual(proceso.valor_total_destino_usd, Decimal('133863.31'))
+        self.assertEqual(proceso.tipo_cambio_destino, Decimal('3.800000'))
+        self.assertEqual(proceso.valor_total_destino_soles, Decimal('508680.58'))
+        self.assertEqual(proceso.kg_por_quintal, Decimal('1000'))
+        self.assertEqual(proceso.quintales_procesados, Decimal('1.000000'))
+        self.assertEqual(proceso.costo_servicio_por_quintal_usd, Decimal('100'))
+        self.assertEqual(proceso.costo_proceso_usd, Decimal('100.000000'))
+        self.assertEqual(proceso.costo_servicio_por_kg_usd, Decimal('0.100000'))
+        self.assertEqual(proceso.costo_servicio_por_kg_soles, Decimal('0.370000'))
         self.assertEqual(proceso.costo_pergamino_consumido, Decimal('10000.00'))
         self.assertEqual(proceso.costo_proceso_soles, Decimal('370.00'))
         self.assertEqual(proceso.costo_total_proceso, Decimal('10370.00'))
-        self.assertEqual(proceso.costo_exportable, Decimal('9371.00'))
-        self.assertEqual(proceso.costo_unitario_exportable, Decimal('12.330263'))
-        self.assertEqual(exportable.costo_asignado, Decimal('9371.00'))
+        self.assertEqual(proceso.costo_exportable, Decimal('9079.72'))
+        self.assertEqual(proceso.costo_unitario_exportable, Decimal('11.947000'))
+        self.assertEqual(proceso.valor_mercado_exportable_soles, Decimal('7030.00'))
+        self.assertEqual(proceso.valor_mercado_subproductos_soles, Decimal('999.00'))
+        self.assertEqual(proceso.costo_asignado_exportable, Decimal('9079.72'))
+        self.assertEqual(proceso.costo_asignado_subproductos, Decimal('1290.28'))
+        self.assertEqual(proceso.diferencia_asignacion, Decimal('0.00'))
+        self.assertEqual(proceso.estado_valorizacion, 'Correcto')
+        self.assertEqual(exportable.valor_mercado_unitario_soles, Decimal('9.250000'))
+        self.assertEqual(exportable.valor_mercado_total_soles, Decimal('7030.00'))
+        self.assertEqual(exportable.factor_asignacion, Decimal('87.5576'))
+        self.assertEqual(exportable.costo_asignado, Decimal('9079.72'))
+        self.assertEqual(exportable.costo_unitario_resultante_soles, Decimal('11.947000'))
         self.assertEqual(subproducto.valor_mercado_unitario_soles, Decimal('5.550000'))
-        self.assertEqual(subproducto.costo_asignado, Decimal('999.00'))
+        self.assertEqual(subproducto.valor_mercado_total_soles, Decimal('999.00'))
+        self.assertEqual(subproducto.factor_asignacion, Decimal('12.4424'))
+        self.assertEqual(subproducto.costo_asignado, Decimal('1290.28'))
+        self.assertEqual(subproducto.costo_unitario_resultante_soles, Decimal('7.168222'))
+
+    def test_editar_detalles_de_trillado_confirmado_no_recalcula_kardex(self):
+        self.client.login(username='admin', password='admin12345')
+        proceso = crear_proceso_trillado(
+            {
+                'fecha': date(2026, 6, 26),
+                'producto_consumido': self.pergamino,
+                'cantidad_consumida': Decimal('1000'),
+                'kg_por_quintal': Decimal('1000'),
+                'costo_servicio_por_quintal_usd': Decimal('100'),
+                'tipo_cambio_fecha_proceso': Decimal('3.700000'),
+                'producto_exportable': self.exportable,
+                'cantidad_exportable': Decimal('760'),
+                'valor_mercado_exportable': Decimal('2.5'),
+                'merma': Decimal('60'),
+                'subproducto_1': self.subproducto,
+                'cantidad_subproducto_1': Decimal('180'),
+                'valor_mercado_subproducto_1': Decimal('1.5'),
+            },
+            user=self.user,
+        )
+        confirmar_proceso_trillado(proceso, user=self.user)
+        movimientos_antes = list(
+            MovimientoKardex.objects.filter(proceso_origen=proceso)
+            .order_by('id')
+            .values_list('id', 'costo_total_entrada', 'costo_total_salida')
+        )
+
+        response = self.client.post(
+            reverse('kardex:proceso_trillado_editar', args=[proceso.id]),
+            {
+                'lote': 'L-POST',
+                'factura_relacionada': 'PROC-POST',
+                'factura_destino': 'E001-1796',
+                'fecha_factura_relacionada': '2026-04-22',
+                'cliente_destino_entidad': self.cliente.id,
+                'contrato_destino': 'P81267.000',
+                'valor_total_destino_usd': '133863.31',
+                'observaciones': 'Destino actualizado despues de confirmar.',
+            },
+        )
+
+        self.assertRedirects(response, reverse('kardex:proceso_trillado_detalle', args=[proceso.id]))
+        proceso.refresh_from_db()
+        self.assertEqual(proceso.lote, 'L-POST')
+        self.assertEqual(proceso.contrato_destino, 'P81267.000')
+        self.assertEqual(proceso.cliente_destino_entidad, self.cliente)
+        self.assertEqual(proceso.cliente_destino, 'VOLCAFE LTD')
+        self.assertEqual(proceso.factura_relacionada, 'PROC-POST')
+        self.assertEqual(proceso.factura_destino, 'E001-1796')
+        self.assertEqual(proceso.fecha_factura_relacionada, date(2026, 4, 22))
+        self.assertEqual(proceso.valor_total_destino_usd, Decimal('133863.31'))
+        self.assertEqual(proceso.tipo_cambio_destino, Decimal('3.800000'))
+        self.assertEqual(proceso.valor_total_destino_soles, Decimal('508680.58'))
+        self.assertEqual(proceso.observaciones, 'Destino actualizado despues de confirmar.')
+        movimientos_despues = list(
+            MovimientoKardex.objects.filter(proceso_origen=proceso)
+            .order_by('id')
+            .values_list('id', 'costo_total_entrada', 'costo_total_salida')
+        )
+        self.assertEqual(movimientos_despues, movimientos_antes)
+
+    def test_editar_detalles_confirmado_no_valida_decimales_largos_bloqueados(self):
+        self.client.login(username='admin', password='admin12345')
+        proceso = crear_proceso_trillado(
+            {
+                'fecha': date(2026, 6, 26),
+                'producto_consumido': self.pergamino,
+                'cantidad_consumida': Decimal('1000'),
+                'kg_por_quintal': Decimal('46'),
+                'costo_servicio_por_quintal_usd': Decimal('5'),
+                'tipo_cambio_fecha_proceso': Decimal('3.700000'),
+                'producto_exportable': self.exportable,
+                'cantidad_exportable': Decimal('760'),
+                'valor_mercado_exportable': Decimal('7.318219'),
+                'merma': Decimal('60'),
+                'subproducto_1': self.subproducto,
+                'cantidad_subproducto_1': Decimal('180'),
+                'valor_mercado_subproducto_1': Decimal('3.884299'),
+            },
+            user=self.user,
+        )
+        confirmar_proceso_trillado(proceso, user=self.user)
+
+        response = self.client.post(
+            reverse('kardex:proceso_trillado_editar', args=[proceso.id]),
+            {
+                'lote': 'L-DEC',
+                'factura_relacionada': '',
+                'factura_destino': 'E001-1796',
+                'fecha_factura_relacionada': '2026-04-22',
+                'cliente_destino_entidad': self.cliente.id,
+                'contrato_destino': 'P81267.000',
+                'valor_total_destino_usd': 'USD 133,863.31',
+                'observaciones': 'Actualizacion con campos bloqueados formateados.',
+            },
+        )
+
+        self.assertRedirects(response, reverse('kardex:proceso_trillado_detalle', args=[proceso.id]))
+        proceso.refresh_from_db()
+        self.assertEqual(proceso.lote, 'L-DEC')
+
+    def test_subproducto_sin_valor_mercado_toma_ultimo_costo_promedio(self):
+        registrar_stock_inicial(
+            producto=self.subproducto,
+            fecha=date(2026, 6, 1),
+            cantidad=Decimal('20'),
+            costo_unitario=Decimal('4.20'),
+            user=self.user,
+        )
+        form = ProcesoTrilladoForm(
+            data={
+                'fecha': '2026-06-26',
+                'producto_consumido': self.pergamino.id,
+                'cantidad_consumida': '1000',
+                'kg_por_quintal': '1000',
+                'costo_servicio_por_quintal_usd': '100',
+                'producto_exportable': self.exportable.id,
+                'cantidad_exportable': '760',
+                'valor_mercado_exportable': '2.5',
+                'merma': '60',
+                'subproducto_1': self.subproducto.id,
+                'cantidad_subproducto_1': '180',
+            }
+        )
+
+        self.assertTrue(form.is_valid(), form.errors)
+        proceso = crear_proceso_trillado(form.cleaned_data, user=self.user)
+
+        subproducto = proceso.productos_obtenidos.get(es_principal=False)
+        self.assertEqual(subproducto.valor_mercado_unitario_soles, Decimal('4.200000'))
+        self.assertEqual(subproducto.valor_mercado_total_soles, Decimal('756.00'))
+        self.assertEqual(subproducto.costo_asignado, Decimal('1006.90'))
 
     def test_confirmar_trillado_genera_movimientos_y_congela_costos(self):
         data = {
             'fecha': date(2026, 6, 26),
             'producto_consumido': self.pergamino,
             'cantidad_consumida': Decimal('1000'),
-            'costo_proceso_usd': Decimal('100'),
+            'kg_por_quintal': Decimal('1000'),
+            'costo_servicio_por_quintal_usd': Decimal('100'),
             'tipo_cambio_fecha_proceso': Decimal('3.700000'),
             'producto_exportable': self.exportable,
             'cantidad_exportable': Decimal('760'),
+            'valor_mercado_exportable': Decimal('2.5'),
             'merma': Decimal('60'),
             'subproducto_1': self.subproducto,
             'cantidad_subproducto_1': Decimal('180'),
@@ -1919,8 +2212,8 @@ class ProcesoTrilladoTests(TestCase):
         self.assertEqual(proceso.costo_pergamino_consumido, Decimal('10000.00'))
         self.assertEqual(proceso.costo_proceso_soles, Decimal('370.00'))
         self.assertEqual(proceso.costo_total_proceso, Decimal('10370.00'))
-        self.assertEqual(proceso.costo_exportable, Decimal('9371.00'))
-        self.assertEqual(proceso.costo_unitario_exportable, Decimal('12.330263'))
+        self.assertEqual(proceso.costo_exportable, Decimal('9079.72'))
+        self.assertEqual(proceso.costo_unitario_exportable, Decimal('11.947000'))
         self.assertEqual(proceso.tipo_cambio_fecha_proceso, Decimal('3.700000'))
 
         movimientos = list(MovimientoKardex.objects.filter(proceso_origen=proceso).order_by('id'))
@@ -1930,9 +2223,9 @@ class ProcesoTrilladoTests(TestCase):
         self.assertEqual(movimientos[0].costo_total_salida, Decimal('10000.00'))
         self.assertEqual(movimientos[1].tipo_movimiento, MovimientoKardex.PROCESO_ENTRADA)
         self.assertEqual(movimientos[1].producto, self.exportable)
-        self.assertEqual(movimientos[1].costo_total_entrada, Decimal('9371.00'))
+        self.assertEqual(movimientos[1].costo_total_entrada, Decimal('9079.72'))
         self.assertEqual(movimientos[2].producto, self.subproducto)
-        self.assertEqual(movimientos[2].costo_total_entrada, Decimal('999.00'))
+        self.assertEqual(movimientos[2].costo_total_entrada, Decimal('1290.28'))
 
         TipoCambioSunat.objects.filter(anio=2026, mes='junio', dia=26).update(venta=Decimal('4.000000'))
         proceso.refresh_from_db()
@@ -1962,10 +2255,12 @@ class ProcesoTrilladoTests(TestCase):
                 'fecha': date(2026, 6, 26),
                 'producto_consumido': self.pergamino,
                 'cantidad_consumida': Decimal('100'),
-                'costo_proceso_usd': Decimal('0'),
+                'kg_por_quintal': Decimal('46'),
+                'costo_servicio_por_quintal_usd': Decimal('0'),
                 'tipo_cambio_fecha_proceso': Decimal('3.700000'),
                 'producto_exportable': self.exportable,
                 'cantidad_exportable': Decimal('40'),
+                'valor_mercado_exportable': Decimal('5'),
                 'merma': Decimal('60'),
             },
             user=self.user,
@@ -1979,16 +2274,18 @@ class ProcesoTrilladoTests(TestCase):
         self.assertEqual(venta_posterior.stock_cantidad, Decimal('90.000000'))
         self.assertEqual(venta_posterior.stock_costo_total, Decimal('1285.71'))
 
-    def test_confirmar_trillado_bloquea_subproductos_mayores_al_costo_total(self):
+    def test_confirmar_trillado_permite_valores_de_venta_mayores_al_costo_total(self):
         proceso = crear_proceso_trillado(
             {
                 'fecha': date(2026, 6, 26),
                 'producto_consumido': self.pergamino,
                 'cantidad_consumida': Decimal('1000'),
-                'costo_proceso_usd': Decimal('0'),
+                'kg_por_quintal': Decimal('46'),
+                'costo_servicio_por_quintal_usd': Decimal('0'),
                 'tipo_cambio_fecha_proceso': Decimal('3.700000'),
                 'producto_exportable': self.exportable,
                 'cantidad_exportable': Decimal('760'),
+                'valor_mercado_exportable': Decimal('2.5'),
                 'merma': Decimal('60'),
                 'subproducto_1': self.subproducto,
                 'cantidad_subproducto_1': Decimal('180'),
@@ -1997,8 +2294,14 @@ class ProcesoTrilladoTests(TestCase):
             user=self.user,
         )
 
-        with self.assertRaises(KardexError):
-            confirmar_proceso_trillado(proceso, user=self.user)
+        confirmar_proceso_trillado(proceso, user=self.user)
+
+        proceso.refresh_from_db()
+        subproducto = proceso.productos_obtenidos.get(es_principal=False)
+        self.assertEqual(proceso.valor_mercado_exportable_soles, Decimal('7030.00'))
+        self.assertEqual(proceso.valor_mercado_subproductos_soles, Decimal('66600.00'))
+        self.assertEqual(proceso.costo_exportable, Decimal('954.77'))
+        self.assertEqual(subproducto.costo_asignado, Decimal('9045.23'))
 
     def test_anular_trillado_genera_reversiones_sin_borrar_originales(self):
         proceso = crear_proceso_trillado(
@@ -2006,10 +2309,12 @@ class ProcesoTrilladoTests(TestCase):
                 'fecha': date(2026, 6, 26),
                 'producto_consumido': self.pergamino,
                 'cantidad_consumida': Decimal('1000'),
-                'costo_proceso_usd': Decimal('100'),
+                'kg_por_quintal': Decimal('1000'),
+                'costo_servicio_por_quintal_usd': Decimal('100'),
                 'tipo_cambio_fecha_proceso': Decimal('3.700000'),
                 'producto_exportable': self.exportable,
                 'cantidad_exportable': Decimal('760'),
+                'valor_mercado_exportable': Decimal('2.5'),
                 'merma': Decimal('60'),
                 'subproducto_1': self.subproducto,
                 'cantidad_subproducto_1': Decimal('180'),
