@@ -1,0 +1,188 @@
+{% extends "kardex/base.html" %}
+{% load kardex_format %}
+
+{% block content %}
+<style>
+    .monthly-kg-wrapper {
+        overflow-x: auto;
+        border: 1px solid #111827;
+        background: #fff;
+    }
+    .monthly-kg-table {
+        min-width: 720px;
+        font-size: 12px;
+        line-height: 1.2;
+        border-color: #111827;
+    }
+    .monthly-kg-table th,
+    .monthly-kg-table td {
+        padding: 3px 5px;
+        border-color: #111827;
+        white-space: nowrap;
+    }
+    .monthly-kg-table thead th {
+        color: #000;
+        background: #fff;
+        font-weight: 700;
+        text-align: center;
+        vertical-align: middle;
+    }
+    .monthly-kg-table .group-end {
+        border-right-width: 2px;
+    }
+    .monthly-kg-table .group-start {
+        border-left-width: 2px;
+    }
+    .monthly-kg-table .numeric {
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }
+    .monthly-kg-table .saldo {
+        font-weight: 700;
+    }
+    .monthly-kg-table tfoot td {
+        border-top-width: 2px;
+        font-weight: 700;
+    }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-3">
+    <div>
+        <h1 class="h3 mb-1">Reporte mensual de ingresos, salidas y saldo final (KG)</h1>
+        <div class="text-secondary small">Resumen anual por cafe pergamino, exportable y subproductos.</div>
+    </div>
+    <a class="btn btn-outline-secondary" href="{% url 'kardex:reportes_index' %}">Reportes</a>
+</div>
+
+<form class="card mb-3" method="get">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-sm-6 col-md-3 col-xl-2">
+                <label class="form-label" for="anio">Anio</label>
+                <input class="form-control" id="anio" name="anio" type="number" min="2000" max="2100" step="1" value="{{ anio }}">
+            </div>
+            <div class="col-12 col-xl-8">
+                <div class="form-label">Items visibles</div>
+                <div class="d-flex flex-wrap gap-3">
+                    {% for categoria in categorias_reporte %}
+                        <div class="form-check">
+                            <input class="form-check-input" id="categoria_{{ categoria.key }}" name="categorias" type="checkbox" value="{{ categoria.key }}" {% if categoria.key in categorias_seleccionadas %}checked{% endif %}>
+                            <label class="form-check-label" for="categoria_{{ categoria.key }}">{{ categoria.label }}</label>
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="col-12 d-flex flex-wrap gap-2">
+                <button class="btn btn-primary" type="submit">Generar</button>
+                <button class="btn btn-outline-success" type="submit" name="export" value="excel">Exportar Excel</button>
+                <a class="btn btn-outline-secondary" href="{% url 'kardex:reporte_mensual_kardex_kg' %}">Limpiar</a>
+            </div>
+        </div>
+    </div>
+</form>
+
+<div class="monthly-kg-wrapper">
+    <table class="table table-sm table-bordered monthly-kg-table mb-0">
+        <thead>
+        <tr>
+            <th rowspan="2" style="width: 46px;">Nro.</th>
+            <th rowspan="2" style="width: 90px;">Mes</th>
+            {% if mostrar_per %}<th class="group-start" colspan="6">PER - CAFE PERGAMINO CONVENCIONAL</th>{% endif %}
+            {% if mostrar_exp %}<th class="group-start" colspan="6">EXP - CAFE EXPORTABLE</th>{% endif %}
+            {% if mostrar_sub %}<th class="group-start" colspan="6">SUB - CAFE SUBPRODUCTOS</th>{% endif %}
+        </tr>
+        <tr>
+            {% if mostrar_per %}
+            <th class="group-start">Compras</th>
+            <th>Ventas</th>
+            <th>Ajuste_+</th>
+            <th>Ajuste_-</th>
+            <th>Proc_Salida</th>
+            <th class="group-end">Saldo_Final</th>
+            {% endif %}
+            {% if mostrar_exp %}
+            <th class="group-start">Compras</th>
+            <th>Ventas</th>
+            <th>Ajuste_+</th>
+            <th>Ajuste_-</th>
+            <th>Proc_Ingreso</th>
+            <th class="group-end">Saldo_Final</th>
+            {% endif %}
+            {% if mostrar_sub %}
+            <th class="group-start">Compras</th>
+            <th>Ventas</th>
+            <th>Ajuste_+</th>
+            <th>Ajuste_-</th>
+            <th>Proc_Ingreso</th>
+            <th class="group-end">Saldo_Final</th>
+            {% endif %}
+        </tr>
+        </thead>
+        <tbody>
+        {% for item in items %}
+            {% with per=item.per exp=item.exp sub=item.sub %}
+                <tr>
+                    <td class="numeric">{{ item.numero }}</td>
+                    <td>{{ item.mes_nombre }}</td>
+                    {% if mostrar_per %}
+                    <td class="numeric group-start">{{ per.compras|numero_guion }}</td>
+                    <td class="numeric">{{ per.ventas|numero_guion }}</td>
+                    <td class="numeric">{{ per.ajuste_positivo|numero_guion }}</td>
+                    <td class="numeric">{{ per.ajuste_negativo|numero_guion }}</td>
+                    <td class="numeric">{{ per.proc_salida|numero_guion }}</td>
+                    <td class="numeric saldo group-end">{{ per.saldo_final|numero_guion }}</td>
+                    {% endif %}
+                    {% if mostrar_exp %}
+                    <td class="numeric group-start">{{ exp.compras|numero_guion }}</td>
+                    <td class="numeric">{{ exp.ventas|numero_guion }}</td>
+                    <td class="numeric">{{ exp.ajuste_positivo|numero_guion }}</td>
+                    <td class="numeric">{{ exp.ajuste_negativo|numero_guion }}</td>
+                    <td class="numeric">{{ exp.proc_ingreso|numero_guion }}</td>
+                    <td class="numeric saldo group-end">{{ exp.saldo_final|numero_guion }}</td>
+                    {% endif %}
+                    {% if mostrar_sub %}
+                    <td class="numeric group-start">{{ sub.compras|numero_guion }}</td>
+                    <td class="numeric">{{ sub.ventas|numero_guion }}</td>
+                    <td class="numeric">{{ sub.ajuste_positivo|numero_guion }}</td>
+                    <td class="numeric">{{ sub.ajuste_negativo|numero_guion }}</td>
+                    <td class="numeric">{{ sub.proc_ingreso|numero_guion }}</td>
+                    <td class="numeric saldo group-end">{{ sub.saldo_final|numero_guion }}</td>
+                    {% endif %}
+                </tr>
+            {% endwith %}
+        {% endfor %}
+        </tbody>
+        <tfoot>
+            {% with per=totales.per exp=totales.exp sub=totales.sub %}
+                <tr>
+                    <td colspan="2">TOTAL</td>
+                    {% if mostrar_per %}
+                    <td class="numeric group-start">{{ per.compras|numero_guion }}</td>
+                    <td class="numeric">{{ per.ventas|numero_guion }}</td>
+                    <td class="numeric">{{ per.ajuste_positivo|numero_guion }}</td>
+                    <td class="numeric">{{ per.ajuste_negativo|numero_guion }}</td>
+                    <td class="numeric">{{ per.proc_salida|numero_guion }}</td>
+                    <td class="numeric saldo group-end">{{ per.saldo_final|numero_guion }}</td>
+                    {% endif %}
+                    {% if mostrar_exp %}
+                    <td class="numeric group-start">{{ exp.compras|numero_guion }}</td>
+                    <td class="numeric">{{ exp.ventas|numero_guion }}</td>
+                    <td class="numeric">{{ exp.ajuste_positivo|numero_guion }}</td>
+                    <td class="numeric">{{ exp.ajuste_negativo|numero_guion }}</td>
+                    <td class="numeric">{{ exp.proc_ingreso|numero_guion }}</td>
+                    <td class="numeric saldo group-end">{{ exp.saldo_final|numero_guion }}</td>
+                    {% endif %}
+                    {% if mostrar_sub %}
+                    <td class="numeric group-start">{{ sub.compras|numero_guion }}</td>
+                    <td class="numeric">{{ sub.ventas|numero_guion }}</td>
+                    <td class="numeric">{{ sub.ajuste_positivo|numero_guion }}</td>
+                    <td class="numeric">{{ sub.ajuste_negativo|numero_guion }}</td>
+                    <td class="numeric">{{ sub.proc_ingreso|numero_guion }}</td>
+                    <td class="numeric saldo group-end">{{ sub.saldo_final|numero_guion }}</td>
+                    {% endif %}
+                </tr>
+            {% endwith %}
+        </tfoot>
+    </table>
+</div>
+{% endblock %}

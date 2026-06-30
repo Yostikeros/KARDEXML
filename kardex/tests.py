@@ -1311,6 +1311,214 @@ class XMLImporterTests(TestCase):
         self.assertIn('02 - Compra', values)
         self.assertIn('F001', values)
 
+    def test_reporte_kardex_sunat_producto_filtra_por_mes(self):
+        producto = Producto.objects.create(
+            codigo_interno='MP-MES',
+            nombre='Cafe por mes',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 1, 10),
+            producto=producto,
+            tipo_movimiento=MovimientoKardex.AJUSTE_ENTRADA,
+            cantidad_entrada=Decimal('10'),
+            costo_unitario_entrada=Decimal('10'),
+            costo_total_entrada=Decimal('100'),
+            stock_cantidad=Decimal('10'),
+            stock_costo_unitario_promedio=Decimal('10'),
+            stock_costo_total=Decimal('100'),
+        )
+        febrero = MovimientoKardex.objects.create(
+            fecha=date(2026, 2, 5),
+            producto=producto,
+            tipo_movimiento=MovimientoKardex.AJUSTE_ENTRADA,
+            cantidad_entrada=Decimal('20'),
+            costo_unitario_entrada=Decimal('11'),
+            costo_total_entrada=Decimal('220'),
+            stock_cantidad=Decimal('30'),
+            stock_costo_unitario_promedio=Decimal('10.666667'),
+            stock_costo_total=Decimal('320'),
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 3, 1),
+            producto=producto,
+            tipo_movimiento=MovimientoKardex.AJUSTE_ENTRADA,
+            cantidad_entrada=Decimal('30'),
+            costo_unitario_entrada=Decimal('12'),
+            costo_total_entrada=Decimal('360'),
+            stock_cantidad=Decimal('60'),
+            stock_costo_unitario_promedio=Decimal('11.333333'),
+            stock_costo_total=Decimal('680'),
+        )
+        user = User.objects.create_user(username='sunat-report-month', password='admin12345')
+        self.client.force_login(user)
+
+        response = self.client.get(
+            reverse('kardex:reporte_kardex_sunat_producto'),
+            {
+                'producto': producto.id,
+                'mes': '2',
+                'anio': '2026',
+            },
+        )
+
+        filas = response.context['filas']
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([fila.movimiento for fila in filas], [febrero])
+        self.assertContains(response, 'ENERO')
+        self.assertContains(response, 'FEBRERO')
+        self.assertContains(response, 'MARZO')
+        self.assertContains(response, 'Febrero 2026')
+
+    def test_reporte_kardex_sunat_producto_muestra_saldo_arrastre_si_mes_no_tiene_movimientos(self):
+        producto = Producto.objects.create(
+            codigo_interno='MP-SALDO',
+            nombre='Cafe saldo',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 1, 10),
+            producto=producto,
+            tipo_movimiento=MovimientoKardex.AJUSTE_ENTRADA,
+            cantidad_entrada=Decimal('10'),
+            costo_unitario_entrada=Decimal('10'),
+            costo_total_entrada=Decimal('100'),
+            stock_cantidad=Decimal('10'),
+            stock_costo_unitario_promedio=Decimal('10'),
+            stock_costo_total=Decimal('100'),
+        )
+        user = User.objects.create_user(username='sunat-report-carry', password='admin12345')
+        self.client.force_login(user)
+
+        response = self.client.get(
+            reverse('kardex:reporte_kardex_sunat_producto'),
+            {
+                'producto': producto.id,
+                'mes': '2',
+                'anio': '2026',
+            },
+        )
+
+        filas = response.context['filas']
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(filas), 1)
+        self.assertEqual(filas[0].movimiento.fecha, date(2026, 2, 1))
+        self.assertEqual(filas[0].tipo_operacion, '16 - Saldo inicial')
+        self.assertEqual(filas[0].movimiento.cantidad_entrada, Decimal('0'))
+        self.assertEqual(filas[0].movimiento.cantidad_salida, Decimal('0'))
+        self.assertEqual(filas[0].movimiento.stock_cantidad, Decimal('10'))
+        self.assertEqual(filas[0].movimiento.stock_costo_total, Decimal('100'))
+        self.assertContains(response, '01/02/2026')
+        self.assertContains(response, '16 - Saldo inicial')
+        self.assertContains(response, '100.00')
+
+    def test_reporte_mensual_kardex_kg_resume_movimientos_y_saldos_por_tipo_producto(self):
+        pergamino = Producto.objects.create(
+            codigo_interno='PER-001',
+            nombre='Cafe pergamino',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        exportable = Producto.objects.create(
+            codigo_interno='CAFX',
+            nombre='Cafe exportable',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        subproducto = Producto.objects.create(
+            codigo_interno='CASU',
+            nombre='Cafe subproductos',
+            tipo_producto=Producto.MATERIA_PRIMA,
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 1, 5),
+            producto=pergamino,
+            tipo_movimiento=MovimientoKardex.ENTRADA,
+            cantidad_entrada=Decimal('100'),
+            stock_cantidad=Decimal('100'),
+            stock_costo_unitario_promedio=Decimal('1'),
+            stock_costo_total=Decimal('100'),
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 2, 10),
+            producto=pergamino,
+            tipo_movimiento=MovimientoKardex.PROCESO_SALIDA,
+            cantidad_salida=Decimal('30'),
+            stock_cantidad=Decimal('70'),
+            stock_costo_unitario_promedio=Decimal('1'),
+            stock_costo_total=Decimal('70'),
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 2, 10),
+            producto=exportable,
+            tipo_movimiento=MovimientoKardex.PROCESO_ENTRADA,
+            cantidad_entrada=Decimal('20'),
+            stock_cantidad=Decimal('20'),
+            stock_costo_unitario_promedio=Decimal('1'),
+            stock_costo_total=Decimal('20'),
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 2, 10),
+            producto=subproducto,
+            tipo_movimiento=MovimientoKardex.PROCESO_ENTRADA,
+            cantidad_entrada=Decimal('5'),
+            stock_cantidad=Decimal('5'),
+            stock_costo_unitario_promedio=Decimal('1'),
+            stock_costo_total=Decimal('5'),
+        )
+        MovimientoKardex.objects.create(
+            fecha=date(2026, 3, 3),
+            producto=exportable,
+            tipo_movimiento=MovimientoKardex.SALIDA,
+            cantidad_salida=Decimal('10'),
+            stock_cantidad=Decimal('10'),
+            stock_costo_unitario_promedio=Decimal('1'),
+            stock_costo_total=Decimal('10'),
+        )
+        user = User.objects.create_user(username='monthly-kg', password='admin12345')
+        self.client.force_login(user)
+
+        response = self.client.get(reverse('kardex:reporte_mensual_kardex_kg'), {'anio': '2026'})
+
+        enero, febrero, marzo, abril = response.context['items'][:4]
+        totales = response.context['totales']
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(enero.per.compras, Decimal('100'))
+        self.assertEqual(enero.per.saldo_final, Decimal('100'))
+        self.assertEqual(febrero.per.proc_salida, Decimal('30'))
+        self.assertEqual(febrero.per.saldo_final, Decimal('70'))
+        self.assertEqual(febrero.exp.proc_ingreso, Decimal('20'))
+        self.assertEqual(febrero.sub.proc_ingreso, Decimal('5'))
+        self.assertEqual(marzo.exp.ventas, Decimal('10'))
+        self.assertEqual(abril.exp.saldo_final, Decimal('10'))
+        self.assertEqual(totales.per.compras, Decimal('100'))
+        self.assertEqual(totales.per.proc_salida, Decimal('30'))
+        self.assertEqual(totales.exp.ventas, Decimal('10'))
+        self.assertEqual(totales.exp.proc_ingreso, Decimal('20'))
+        self.assertEqual(totales.sub.proc_ingreso, Decimal('5'))
+        self.assertContains(response, 'PER - CAFE PERGAMINO CONVENCIONAL')
+        self.assertContains(response, 'EXP - CAFE EXPORTABLE')
+        self.assertContains(response, 'SUB - CAFE SUBPRODUCTOS')
+
+        solo_per_response = self.client.get(
+            reverse('kardex:reporte_mensual_kardex_kg'),
+            {'anio': '2026', 'categorias': ['per']},
+        )
+        self.assertEqual(solo_per_response.status_code, 200)
+        self.assertEqual(solo_per_response.context['categorias_seleccionadas'], ['per'])
+        self.assertContains(solo_per_response, 'colspan="6">PER - CAFE PERGAMINO CONVENCIONAL')
+        self.assertNotContains(solo_per_response, 'colspan="6">EXP - CAFE EXPORTABLE')
+        self.assertNotContains(solo_per_response, 'colspan="6">SUB - CAFE SUBPRODUCTOS')
+
+        export_response = self.client.get(
+            reverse('kardex:reporte_mensual_kardex_kg'),
+            {'anio': '2026', 'categorias': ['per', 'exp'], 'export': 'excel'},
+        )
+        workbook = load_workbook(BytesIO(export_response.content))
+        values = [cell.value for row in workbook.active.iter_rows() for cell in row]
+        self.assertEqual(export_response.status_code, 200)
+        self.assertIn('PER Compras', values)
+        self.assertIn('EXP Compras', values)
+        self.assertNotIn('SUB Compras', values)
+
     def test_registra_stock_inicial_como_ajuste_entrada(self):
         producto = Producto.objects.create(
             codigo_interno='MP-CAFE',

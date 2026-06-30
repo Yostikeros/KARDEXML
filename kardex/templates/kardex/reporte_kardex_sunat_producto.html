@@ -13,7 +13,7 @@
 <form class="card mb-3" method="get">
     <div class="card-body">
         <div class="row g-3 align-items-end">
-            <div class="col-lg-5">
+            <div class="col-lg-4">
                 <label class="form-label" for="producto">Producto</label>
                 <select class="form-select" id="producto" name="producto" required>
                     <option value="">Selecciona un producto</option>
@@ -32,7 +32,20 @@
                 <label class="form-label" for="fecha_fin">Hasta</label>
                 <input class="form-control" id="fecha_fin" name="fecha_fin" type="date" value="{{ fecha_fin }}">
             </div>
-            <div class="col-lg-3">
+            <div class="col-sm-6 col-lg-2">
+                <label class="form-label" for="mes">Mes</label>
+                <select class="form-select" id="mes" name="mes">
+                    <option value="">Todos</option>
+                    {% for numero, nombre in meses_reporte %}
+                        <option value="{{ numero }}" {% if numero == mes_seleccionado %}selected{% endif %}>{{ nombre|upper }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-6 col-lg-2">
+                <label class="form-label" for="anio">Anio</label>
+                <input class="form-control" id="anio" name="anio" type="number" min="2000" max="2100" step="1" value="{{ anio }}" placeholder="2026">
+            </div>
+            <div class="col-lg-12">
                 <button class="btn btn-primary" type="submit">Generar</button>
                 <button class="btn btn-outline-success" type="submit" name="export" value="excel">Exportar Excel</button>
                 <a class="btn btn-outline-secondary" href="{% url 'kardex:reporte_kardex_sunat_producto' %}">Limpiar</a>
@@ -48,7 +61,7 @@
             FORMATO 13.1: "REGISTRO DE INVENTARIO PERMANENTE VALORIZADO - DETALLE DEL INVENTARIO VALORIZADO"
         </div>
         <div class="row g-2 small">
-            <div class="col-md-4"><span class="fw-semibold">Periodo:</span> {% if fecha_inicio or fecha_fin %}{{ fecha_inicio|default:"..." }} al {{ fecha_fin|default:"..." }}{% else %}Todos los movimientos{% endif %}</div>
+            <div class="col-md-4"><span class="fw-semibold">Periodo:</span> {{ periodo_label }}</div>
             <div class="col-md-4"><span class="fw-semibold">RUC:</span> {{ empresa.ruc|default:"-" }}</div>
             <div class="col-md-4"><span class="fw-semibold">Razon social:</span> {{ empresa.razon_social|default:"-" }}</div>
             <div class="col-md-4"><span class="fw-semibold">Establecimiento:</span> {{ empresa.direccion|default:"Principal" }}</div>

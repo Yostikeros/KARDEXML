@@ -32,7 +32,7 @@
     <nav class="sidebar-nav">
         <a class="nav-link {% if current == 'documentos_lista' or current == 'comprobante_documento' %}active{% endif %}" href="{% url 'kardex:documentos_lista' %}"><span class="nav-icon">DO</span><span>Documentos</span></a>
         <a class="nav-link {% if current == 'tipo_cambio_sunat' %}active{% endif %}" href="{% url 'kardex:tipo_cambio_sunat' %}"><span class="nav-icon">TC</span><span>Tipo cambio</span></a>
-        <a class="nav-link {% if current == 'reportes_index' or current == 'reporte_stock_actual' or current == 'reporte_kardex_producto' or current == 'reporte_kardex_sunat_producto' or current == 'reporte_documentos_importados' or current == 'reporte_movimientos_documento' %}active{% endif %}" href="{% url 'kardex:reportes_index' %}"><span class="nav-icon">RE</span><span>Reportes</span></a>
+        <a class="nav-link {% if current == 'reportes_index' or current == 'reporte_stock_actual' or current == 'reporte_kardex_producto' or current == 'reporte_kardex_sunat_producto' or current == 'reporte_mensual_kardex_kg' or current == 'reporte_documentos_importados' or current == 'reporte_movimientos_documento' %}active{% endif %}" href="{% url 'kardex:reportes_index' %}"><span class="nav-icon">RE</span><span>Reportes</span></a>
     </nav>
 </div>
 

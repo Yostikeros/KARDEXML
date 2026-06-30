@@ -1,3 +1,5 @@
+from calendar import monthrange
+from datetime import date
 from decimal import Decimal
 
 from django.contrib import messages
@@ -54,6 +56,7 @@ from .services.procesos import (
     crear_proceso_trillado,
 )
 from .services.reportes import (
+    MESES_NOMBRE,
     entidad_documento_reporte,
     obtener_empresa_principal,
     obtener_documentos_importados,
@@ -62,6 +65,7 @@ from .services.reportes import (
     obtener_kardex_sunat_producto,
     obtener_movimientos_documento,
     obtener_movimientos_producto,
+    obtener_reporte_mensual_kardex_kg,
     obtener_stock_actual,
     obtener_stock_valorizado_total,
 )
@@ -839,8 +843,18 @@ def reporte_kardex_sunat_producto_view(request):
     producto_id = request.GET.get("producto") or None
     fecha_inicio_raw = request.GET.get("fecha_inicio") or ""
     fecha_fin_raw = request.GET.get("fecha_fin") or ""
+    mes_raw = request.GET.get("mes") or ""
+    anio_raw = request.GET.get("anio") or ""
     fecha_inicio = parse_date(fecha_inicio_raw) if fecha_inicio_raw else None
     fecha_fin = parse_date(fecha_fin_raw) if fecha_fin_raw else None
+    fecha_inicio, fecha_fin, periodo_label = _periodo_kardex_sunat(
+        fecha_inicio,
+        fecha_fin,
+        fecha_inicio_raw,
+        fecha_fin_raw,
+        mes_raw,
+        anio_raw,
+    )
     productos = Producto.objects.filter(activo=True, controla_stock=True).order_by("nombre")
     producto_seleccionado = get_object_or_404(Producto, pk=producto_id) if producto_id else None
     filas = obtener_kardex_sunat_producto(producto_seleccionado, fecha_inicio, fecha_fin) if producto_seleccionado else []
@@ -886,7 +900,7 @@ def reporte_kardex_sunat_producto_view(request):
             ],
             metadata=[
                 ("Formato", "13.1 Registro de Inventario Permanente Valorizado"),
-                ("Periodo", f"{fecha_inicio_raw or '...'} al {fecha_fin_raw or '...'}"),
+                ("Periodo", periodo_label),
                 ("RUC", empresa.ruc if empresa else ""),
                 ("Razon social", empresa.razon_social if empresa else ""),
                 ("Producto", str(producto_seleccionado) if producto_seleccionado else ""),
@@ -902,8 +916,139 @@ def reporte_kardex_sunat_producto_view(request):
             "filas": filas,
             "fecha_inicio": fecha_inicio_raw,
             "fecha_fin": fecha_fin_raw,
+            "mes": mes_raw,
+            "mes_seleccionado": _parse_int(mes_raw),
+            "anio": anio_raw or date.today().year,
+            "meses_reporte": MESES_NOMBRE.items(),
+            "periodo_label": periodo_label,
         },
     )
+
+
+def _periodo_kardex_sunat(fecha_inicio, fecha_fin, fecha_inicio_raw, fecha_fin_raw, mes_raw, anio_raw):
+    mes = _parse_int(mes_raw)
+    anio = _parse_int(anio_raw)
+    if mes and 1 <= mes <= 12 and anio:
+        primer_dia = date(anio, mes, 1)
+        ultimo_dia = date(anio, mes, monthrange(anio, mes)[1])
+        periodo_label = f"{MESES_NOMBRE[mes]} {anio} ({primer_dia:%Y-%m-%d} al {ultimo_dia:%Y-%m-%d})"
+        return primer_dia, ultimo_dia, periodo_label
+
+    if fecha_inicio or fecha_fin:
+        return fecha_inicio, fecha_fin, f"{fecha_inicio_raw or '...'} al {fecha_fin_raw or '...'}"
+
+    return fecha_inicio, fecha_fin, "Todos los movimientos"
+
+
+def _parse_int(value):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+CATEGORIAS_REPORTE_MENSUAL_KG = [
+    {
+        "key": "per",
+        "label": "PER - CAFE PERGAMINO CONVENCIONAL",
+        "prefix": "PER",
+        "proc_header": "Proc. salida",
+        "proc_attr": "proc_salida",
+    },
+    {
+        "key": "exp",
+        "label": "EXP - CAFE EXPORTABLE",
+        "prefix": "EXP",
+        "proc_header": "Proc. ingreso",
+        "proc_attr": "proc_ingreso",
+    },
+    {
+        "key": "sub",
+        "label": "SUB - CAFE SUBPRODUCTOS",
+        "prefix": "SUB",
+        "proc_header": "Proc. ingreso",
+        "proc_attr": "proc_ingreso",
+    },
+]
+
+
+@login_required(login_url="/admin/login/")
+def reporte_mensual_kardex_kg_view(request):
+    anio = _parse_int(request.GET.get("anio")) or date.today().year
+    categorias_seleccionadas = _categorias_reporte_mensual_kardex(request)
+    items, totales = obtener_reporte_mensual_kardex_kg(anio)
+    if request.GET.get("export") == "excel":
+        return generar_excel_response(
+            f"reporte_mensual_kardex_kg_{anio}.xlsx",
+            "Mensual KG",
+            _headers_reporte_mensual_kardex_excel(categorias_seleccionadas),
+            [_fila_reporte_mensual_kardex_excel(item, categorias_seleccionadas) for item in items]
+            + [_fila_reporte_mensual_kardex_excel(totales, categorias_seleccionadas, total=True)],
+            metadata=[
+                ("Reporte", "Ingresos, salidas y saldo final (KG)"),
+                ("Anio", anio),
+                ("Categorias", " / ".join(categoria["label"] for categoria in categorias_seleccionadas)),
+            ],
+        )
+    return render(
+        request,
+        "kardex/reporte_mensual_kardex_kg.html",
+        {
+            "anio": anio,
+            "items": items,
+            "totales": totales,
+            "categorias_reporte": CATEGORIAS_REPORTE_MENSUAL_KG,
+            "categorias_seleccionadas": [categoria["key"] for categoria in categorias_seleccionadas],
+            "mostrar_per": any(categoria["key"] == "per" for categoria in categorias_seleccionadas),
+            "mostrar_exp": any(categoria["key"] == "exp" for categoria in categorias_seleccionadas),
+            "mostrar_sub": any(categoria["key"] == "sub" for categoria in categorias_seleccionadas),
+        },
+    )
+
+
+def _categorias_reporte_mensual_kardex(request):
+    seleccionadas = request.GET.getlist("categorias")
+    categorias_validas = {categoria["key"] for categoria in CATEGORIAS_REPORTE_MENSUAL_KG}
+    if not seleccionadas:
+        seleccionadas = [categoria["key"] for categoria in CATEGORIAS_REPORTE_MENSUAL_KG]
+    seleccionadas = [key for key in seleccionadas if key in categorias_validas]
+    if not seleccionadas:
+        seleccionadas = [categoria["key"] for categoria in CATEGORIAS_REPORTE_MENSUAL_KG]
+    return [categoria for categoria in CATEGORIAS_REPORTE_MENSUAL_KG if categoria["key"] in seleccionadas]
+
+
+def _headers_reporte_mensual_kardex_excel(categorias):
+    headers = ["N", "Mes"]
+    for categoria in categorias:
+        prefix = categoria["prefix"]
+        headers.extend(
+            [
+                f"{prefix} Compras",
+                f"{prefix} Ventas",
+                f"{prefix} Ajuste +",
+                f"{prefix} Ajuste -",
+                f"{prefix} {categoria['proc_header']}",
+                f"{prefix} Saldo final",
+            ]
+        )
+    return headers
+
+
+def _fila_reporte_mensual_kardex_excel(item, categorias, total=False):
+    fila = ["" if total else item.numero, item.mes_nombre]
+    for categoria_def in categorias:
+        categoria = getattr(item, categoria_def["key"])
+        fila.extend(
+            [
+                categoria.compras,
+                categoria.ventas,
+                categoria.ajuste_positivo,
+                categoria.ajuste_negativo,
+                getattr(categoria, categoria_def["proc_attr"]),
+                categoria.saldo_final,
+            ]
+        )
+    return fila
 
 
 @login_required(login_url="/admin/login/")

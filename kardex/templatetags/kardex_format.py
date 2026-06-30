@@ -17,6 +17,17 @@ def numero_6(value):
 
 
 @register.filter
+def numero_guion(value):
+    try:
+        decimal_value = Decimal(str(value or '0'))
+    except (InvalidOperation, ValueError):
+        return value
+    if decimal_value == 0:
+        return '-'
+    return _formato_decimal(decimal_value, 2)
+
+
+@register.filter
 def usd(value):
     return f'USD {_formato_decimal(value, 2)}'
 

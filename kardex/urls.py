@@ -49,6 +49,7 @@ urlpatterns = [
     path('reportes/stock-actual/', views.reporte_stock_actual_view, name='reporte_stock_actual'),
     path('reportes/kardex-producto/', views.reporte_kardex_producto_view, name='reporte_kardex_producto'),
     path('reportes/kardex-sunat-producto/', views.reporte_kardex_sunat_producto_view, name='reporte_kardex_sunat_producto'),
+    path('reportes/mensual-kardex-kg/', views.reporte_mensual_kardex_kg_view, name='reporte_mensual_kardex_kg'),
     path('reportes/documentos-mensual/', views.reporte_documentos_mensual_view, name='reporte_documentos_mensual'),
     path('reportes/documentos-mensual/<int:anio>/<int:mes>/', views.reporte_documentos_mensual_detalle_view, name='reporte_documentos_mensual_detalle'),
     path('reportes/documentos-importados/', views.reporte_documentos_importados_view, name='reporte_documentos_importados'),
